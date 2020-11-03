@@ -199,39 +199,18 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log('loss/train', result['loss'], on_step=True)
         yhat = result['yhat'].clone().detach().cpu()
         y = result['y'].clone().detach().cpu()
-        # print(y)
-        # print(yhat)
+        
         self.log_sklearn_metrics(yhat, y, prefix='train')
         # self.log('accuracy/train', self.train_accuracy(yhat, y), on_epoch=True) 
         # self.log('precision/train', self.train_precision(yhat, y), on_epoch=True) 
         # self.log('recall/train', self.train_recall(yhat, y), on_epoch=True) 
         # self.log('fscore/train', self.train_fscore(yhat, y), on_epoch=True) 
 
-                # dealing with problematic classes
-        # log every example of these problematic classes
-        # problematic_classes = ('gu')
-        # if self.hparams.dataset == 'medleydb':
-        #     for idx, ye in enumerate(y):
-        #         cla = self.classes[ye]
-        #         if cla in problematic_classes:
-        #             self.log_example(
-        #                 audio=batch['X'][idx], 
-        #                 sr=self.hparams.sample_rate,
-        #                 yhat=yhat[idx], 
-        #                 y=y[idx], 
-        #                 title=cla)
-        #             self.logger.experiment.add_text(f'{cla}_path_to_audio', 
-        #                 batch['path_to_audio'][idx], self.global_step)
-
-
         return result['loss']
 
     def validation_step(self, batch, batch_idx):  
         # get result of forward pass
         result = self._main_step(batch,batch_idx)
-
-        # HUGO: why does this fix everything?????
-        # self.model.openl3.train()
 
         # log layers defined by model
         for layer in self.model.log_layers:
@@ -243,10 +222,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         # pick and log sample audio
         self.log_random_example(batch['X'], self.hparams.sample_rate, y, yhat)
 
-        # print('VAL')
-        # print(y)
-        # print(yhat)
-        
         # metric logging
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
         self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
@@ -447,14 +422,6 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         return outputs
 
-class TeacherStudentInstrumentDetectionTask(InstrumentDetectionTask):
-
-    def __init__(self, hparams):
-        super().__init__(hparams)
-        self.hparams = hparams
-        self.fwd_hooks = OrderedDict()
-        self.log_dir = None
-
 def train_instrument_detection_task(hparams, model):
     from test_tube import Experiment
     
@@ -532,7 +499,6 @@ def train_instrument_detection_task(hparams, model):
         save_torchscript_model(model.model, 'model.pt')
                                 # os.path.join(model.log_dir, 
                                 #             f'model_torchscript.pt'))
-
 
 def get_task_parser():
     import argparse
