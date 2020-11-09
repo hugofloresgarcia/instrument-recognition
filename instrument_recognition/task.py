@@ -119,6 +119,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # AUDIO
         parser.add_argument('--sample_rate',     default=48000, type=int)
+        parser.add_argument('--online_transforms', default=False, type=str2bool)
 
         return parser
 
@@ -147,47 +148,36 @@ class InstrumentDetectionTask(pl.LightningModule):
     def criterion(self, yhat, y):
         return F.cross_entropy(yhat, y, weight=self.class_weights)
 
-    def preprocess(self, audio, labels, train=False, 
-                   mixup=False):
+    def preprocess(self, batch, train=False):
         if len(audio) == 1:
-            audio = torch.cat([audio, audio], dim=0)
-            labels = torch.cat([labels, labels], dim=0)
+            audio = torch.cat([batch['X'], batch['X']], dim=0)
+            labels = torch.cat([batch['y'], batch['y']], dim=0)
 
-        # batch transforms
-        if train:
-            pass
-            # augmentation coming soon
-            # print('applying transforms...')
-            # transforms.random_transform(audio, self.hparams.sample_rate, ['compand', 'overdrive', 
-            #                             'reverb', 'pitch', 'stretch', 
-            #                             'tremolo'])
-            # print('transforms done')
-        
-        if mixup:
-            audio, y_a, y_b, lam = mixup_data(audio, labels, alpha=self.hparams.mixup_alpha)
-            return audio, y_a, y_b, lam
+        # batch transforms are now offline
+        if train and self.hparams.online_transforms:
+            batch['X'] = transforms.random_transform(batch['X'], self.hparams.sample_rate, ['overdrive', 
+                                        'reverb', 'pitch', 'stretch'])
+        return batch
 
-        return audio, labels
-
-    def _main_step(self, batch, batch_idx, mixup=False, train=False):
-        if not (mixup and train):
-            X, y = self.preprocess(batch['X'], batch['y'], 
-                                mixup=mixup, train=train)
+    def _main_step(self, batch, batch_idx, train=False):
+        if not (self.hparams.mixup and train):
+            batch = self.preprocess(batch['X'], batch['y'], train=train)
+            X, y = batch['X'], batch['y']
             # forward pass through model
             yhat = self.model(X)
             loss = self.criterion(yhat, y)
         else:
-            X, y_a, y_b, lam = self.preprocess(batch['X'], batch['y'], 
-                                mixup=mixup, train=train)
+            batch = self.preprocess(batch, train=train)
+            X, y_a, y_b, lam = mixup_data(batch['X'], batch['y'], alpha=self.hparams.mixup_alpha)
             # forward pass through model
             yhat = self.model(X)
             loss = mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
-            y = batch['y']
+            y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
 
         yhat = torch.argmax(F.softmax(yhat, dim=1), dim=1, keepdim=False)
 
-        return dict(loss=loss, y=y,
-                    yhat=yhat, X=X)
+        return dict(loss=loss, y=y.detach().cpu(),
+                    yhat=yhat.detach().cpu(), X=X.detach().cpu())
 
     def training_step(self, batch, batch_idx):
         # get result of forward pass
@@ -195,65 +185,58 @@ class InstrumentDetectionTask(pl.LightningModule):
                                 mixup=self.hparams.mixup,
                                 train=True)
 
+        # update the batch with the result 
+        batch.update(result)
+
         # train logging
         self.log('loss/train', result['loss'], on_step=True)
-        yhat = result['yhat'].clone().detach().cpu()
-        y = result['y'].clone().detach().cpu()
+
+        # pick and log sample audio
+        if batch_idx % 100 == 0:
+            self.log_random_example(batch, title='train-sample')
         
-        self.log_sklearn_metrics(yhat, y, prefix='train')
-        # self.log('accuracy/train', self.train_accuracy(yhat, y), on_epoch=True) 
-        # self.log('precision/train', self.train_precision(yhat, y), on_epoch=True) 
-        # self.log('recall/train', self.train_recall(yhat, y), on_epoch=True) 
-        # self.log('fscore/train', self.train_fscore(yhat, y), on_epoch=True) 
+        self.log_sklearn_metrics(yhat, y, prefix='train')) 
 
         return result['loss']
 
     def validation_step(self, batch, batch_idx):  
         # get result of forward pass
         result = self._main_step(batch,batch_idx)
+        # update the batch with the result 
+        batch.update(result)
 
         # log layers defined by model
         for layer in self.model.log_layers:
             self.log_layer_io(layer)
 
-        yhat = result['yhat'].detach().cpu()
-        y = result['y'].detach().cpu()
-
         # pick and log sample audio
-        self.log_random_example(batch['X'], self.hparams.sample_rate, y, yhat)
+        if batch_idx % 100 == 0:
+            self.log_random_example(batch, title='train-sample')
 
         # metric logging
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
         self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
         self.log_sklearn_metrics(yhat, y, prefix='val')
-        # self.log('accuracy/val', self.val_accuracy(yhat, y), on_epoch=True) 
-        # self.log('precision/val', self.val_precision(yhat, y), on_epoch=True) 
-        # self.log('recall/val', self.val_recall(yhat, y), on_epoch=True) 
-        # self.log('fscore/val', self.val_fscore(yhat, y), on_epoch=True) 
 
         return result
 
     def test_step(self, batch, batch_idx):
         # get result of forward pass
         result = self._main_step(batch,batch_idx)
+        # update the batch with the result 
+        batch.update(result)
 
         # log layers defined by model
         for layer in self.model.log_layers:
             self.log_layer_io(layer)
 
-        yhat = result['yhat'].detach().cpu()
-        y = result['y'].detach().cpu()
-
         # pick and log sample audio
-        self.log_random_example(batch['X'], self.hparams.sample_rate, y, yhat)
+        if batch_idx % 100 == 0:
+            self.log_random_example(batch, title='train-sample')
 
         # metric logging
         self.log('loss/test', result['loss'], logger=True)     
-        self.log_sklearn_metrics(yhat, y, prefix='test')  
-        # self.log('accuracy/test', self.test_accuracy(yhat, y), on_epoch=True) 
-        # self.log('precision/test', self.test_precision(yhat, y), on_epoch=True) 
-        # self.log('recall/test', self.test_recall(yhat, y), on_epoch=True) 
-        # self.log('fscore/test', self.test_fscore(yhat, y), on_epoch=True) 
+        self.log_sklearn_metrics(yhat, y, prefix='test')
 
         return result
     
@@ -294,20 +277,31 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'recall/{prefix}', recall_score(y, yhat,  average='micro'), on_epoch=False)
         self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='micro', beta=1), on_epoch=False)
 
-    def log_random_example(self, audio, sr, yhat, y, title='sample'):
+    def log_random_example(self, batch, title='sample',):
         """
         log a random audio example with predictions and truths!
         """
+        audio = batch['X']
+        yhat = batch['yhat']
+        y = batch['y']
+        path_to_audio = batch['path_to_audio']
+
         idx = np.random.randint(0, len(audio))
-        self.logger.experiment.add_audio(f'{title}_audio', 
-                                        audio[idx].detach().cpu(), 
-                                        self.global_step, 
-                                        sr)
-        pred = self.classes[int(yhat[idx].detach().cpu())]
-        truth = self.classes[int(y[idx].detach().cpu())]
-        self.logger.experiment.add_text(f'{title}', 
+        pred = self.classes[yhat[idx]]
+        truth = self.classes[y[idx]]
+
+        self.logger.experiment.add_audio(f'{title}-audio/{truth}', 
+            audio[idx], self.global_step, self.hparams.sample_rate)
+
+        self.logger.experiment.add_text(f'{title}-predVtruth', 
             f'pred: {pred}\n truth:{truth}', 
             self.global_step)
+        
+        self.logger.experiment.add_text(f'{title}-probits', 
+            f'pred: {yhat[idx].numpy()} \n truth: {y[idx].numpy()}', 
+            self.global_step)
+        
+        self.logger.experiment.add_text(f'{title}-audiopath', str(path_to_audio[idx]), self.global_step)
 
     def log_example(self, audio, sr, yhat, y, title='sample'):
         """note: example must be a SINGLE example. 

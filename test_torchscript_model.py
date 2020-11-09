@@ -32,7 +32,7 @@ model.eval()
 
 
 # dataset = MDBDataset()
-# audio, sr = torchaudio.load('/home/hugo/data/philharmonia/all-samples/violin/violin_A4_15_fortissimo_arco-normal.mp3')
+# audio, sr = torchaudio.load('/home/hugo/CHONK/data/philharmonia/all-samples/violin/violin_A4_15_fortissimo_arco-normal.mp3')
 # audio = audio_utils.resample(audio.unsqueeze(0), sr, 48000)[:, :, 48000//2:int(48000*1.5)]
 # # a = torch.randn((15, 1, 48000))
 # # audio = torch.stack([*audio, *a])

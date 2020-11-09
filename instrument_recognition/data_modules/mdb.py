@@ -13,21 +13,22 @@ import soundfile as sf
 import os
 import json
 from instrument_recognition.utils import audio_utils
+from instrument_recognition.utils.transforms  import random_transform
 
 class_dict = {
     'Main System': 'other',
     # 'accordion'
     # 'acoustic guitar'
     # 'alto saxophone'
-    # 'auxiliary percussion'
+    'auxiliary percussion': 'percussion',
     # 'bamboo flute'
     # 'banjo'
     # 'baritone saxophone'
     # 'bass clarinet'
     # 'bass drum'
     # 'bassoon'
-    # 'bongo'
-    # 'brass section'
+    'bongo': 'percussion',
+    'brass section': 'brass',
     # 'cello'
     'cello section': 'cello',
     'chimes': 'other',
@@ -49,18 +50,18 @@ class_dict = {
     'female singer': 'female vocalist',
     # 'flute'
     'flute section': 'flute',
-    # 'french horn'
-    'french horn section': 'french horn',
+    'french horn': 'brass',
+    'french horn section': 'brass',
     'fx/processed sound': 'other',
-    # 'glockenspiel'
-    # 'gong'
+    'glockenspiel' : 'mallet percussion',
+    'gong': 'percussion',
     # 'gu'
     # 'guzheng'
     # 'harmonica'
     # 'harp'
-    # 'horn section'
+    'horn section': 'brass',
     'kick drum': 'drum set',
-    # 'lap steel guitar'
+    'lap steel guitar': 'acoustic guitar',
     'liuqin': 'other',
     'male rapper': 'male vocalist',
     'male singer': 'male vocalist',
@@ -73,23 +74,23 @@ class_dict = {
     # 'piccolo'
     'sampler': 'other', 
     'scratches': 'other', 
-    # 'shaker': 'percussion', 
+    'shaker': 'percussion', 
     'snare drum': 'drum set',
     # 'soprano saxophone'
     # 'string section'
     # 'synthesizer'
-    # 'tabla'
+    'tabla': 'percussion',
     'tack piano': 'piano',
     'tambourine': 'percussion',
     # 'tenor saxophone'
-    # 'timpani'
+    'timpani': 'percussion',
     'toms': 'percussion',
-    # 'trombone'
-    'trombone section': 'trombone',
-    # 'trumpet'
-    'trumpet section': 'trumpet',
-    # 'tuba'
-    # 'vibraphone'
+    'trombone': 'brass',
+    'trombone section': 'brass',
+    'trumpet': 'brass',
+    'trumpet section': 'brass',
+    'tuba': 'other',
+    'vibraphone': 'mallet percussion',
     # 'viola'
     'viola section': 'viola',
     # 'violin'
@@ -99,12 +100,81 @@ class_dict = {
     # 'zhongruan'
 }
 
-def generate_medleydb_metadata(chunk_len=None, sr=48000):
+# rack up the workers
+from multiprocessing import Pool, Queue
+
+q = Queue()
+
+def process_mtrack(args):
+    mtrack, chunk_len, sr, hop_len, splits, transform_train = args
+    # figure out whether we are going to add FX to this track or not
+    if splits is not None:
+        if mtrack.track_id in splits['train'] and transform_train:
+            transform_audio = True
+        else: 
+            transform_audio = False
+
+    for stem_id, stem in mtrack.stems.items():
+        # LOAD AUDIO
+        path_to_audio = stem.audio_path
+        audio, sr = librosa.load(path_to_audio, mono=True, sr=sr)
+
+        # TRIM ALL SILENCE OFF AUDIO
+        tfm = sox.Transformer()
+        tfm.silence(min_silence_duration=0.3, buffer_around_silence=False)
+        audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
+
+        # determine how many 1 second chunks we can get out of this
+        n_chunks = int(np.ceil(len(audio)/(chunk_len*sr)))
+
+        # iterate through chunks
+        for start_time in np.arange(0, n_chunks, hop_len):
+            # zero pad 
+            audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
+
+            # format save path
+            # SEND them bois to CHONK
+            audio_chunk_path = stem.audio_path.replace('data/medleydb/Audio', 
+                        f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
+            audio_chunk_path = audio_chunk_path.replace('.wav', f'_{start_time}.npy')
+            
+            os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
+            print(f'saving {audio_chunk_path}')
+
+            if transform_audio:
+                audio_chunk = torch.from_numpy(audio_chunk)
+                audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
+                    sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
+                audio_chunk = audio_chunk.numpy()
+
+            np.save(audio_chunk_path, audio_chunk)
+
+            entry = dict(
+                # the definite stuff
+                path_to_audio=audio_chunk_path, 
+                instrument=stem.instrument, 
+                duration=chunk_len, 
+                start_time=start_time, 
+                
+                # the extras
+                track_id=mtrack.track_id, 
+                stem_idx=stem.stem_idx, 
+                audio_transformed=transform_audio)
+            
+            # metadata.append(entry)
+            q.put(entry)
+
+def generate_medleydb_metadata(chunk_len=1, sr=48000, hop_len=1.0, splits=None, transform_train=True):
     """
     creates medleydb metadata. 
     params:
         chunk_len (float): length of each audio chunk (in seconds),
             if none, the entries arent chunked
+        sr (int): export sample rate
+        hop_len (float): hop length when creating new samples
+        splits (dict[list]): medleydb artist cond split (for trainsfroms)
+        transform_train (bool): whether to apply transforms for the 
+            train test split track ids. If splits is None, then this doesn't matter
     returns:
         metadata (list of dicts): each dict
         entry has the following fields:
@@ -120,46 +190,19 @@ def generate_medleydb_metadata(chunk_len=None, sr=48000):
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
     mtrack_generator = tqdm(mtrack_generator, desc='generating medleydb metadata')
 
+
+    pool = Pool()
+
+    args = []
     for mtrack in mtrack_generator:
-        for stem_id, stem in mtrack.stems.items():
-            # LOAD AUDIO
-            path_to_audio = stem.audio_path
-            audio, sr = librosa.load(path_to_audio, mono=True, sr=sr)
+        args.append((mtrack, chunk_len, sr, hop_len, splits, transform_train))
 
-            # TRIM ALL SILENCE OFF AUDIO
-            tfm = sox.Transformer()
-            tfm.silence(min_silence_duration=0.3, buffer_around_silence=False)
-            audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
+    # do the thing!
+    pool.map(process_mtrack, args)
+    pool.join()
+    pool.close()
 
-            # determine how many 1 second chunks we can get out of this
-            n_chunks = int(np.ceil(len(audio)/(chunk_len*sr)))
-
-            # iterate through chunks
-            for start_time in range(n_chunks):
-                # zero pad 
-                audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
-
-                # format save path
-                audio_chunk_path = stem.audio_path.replace('medleydb/Audio', 
-                            f'medleydb/Audio_chunklen-{chunk_len}_sr-{sr}')
-                audio_chunk_path = audio_chunk_path.replace('.wav', f'_{start_time}.npy')
-                
-                os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-                print(f'saving {audio_chunk_path}')
-                np.save(audio_chunk_path, audio_chunk)
-
-                entry = dict(
-                    # the definite stuff
-                    path_to_audio=audio_chunk_path, 
-                    instrument=stem.instrument, 
-                    duration=chunk_len, 
-                    start_time=start_time, 
-                    
-                    # the extras
-                    track_id=mtrack.track_id, 
-                    stem_idx=stem.stem_idx)
-                
-                metadata.append(entry)
+    metadata = list(q.queue)
 
     return metadata
 
@@ -171,7 +214,7 @@ def get_audio_chunk(audio, sr, start_time, chunk_len):
     assert audio.ndim == 1, 'audio needs to be 1 dimensional'
     duration = audio.shape[-1] / sr
 
-    start_idx = start_time * sr
+    start_idx = int(start_time * sr)
     end_time = start_time + chunk_len 
     end_time = min([end_time, duration])
     end_idx = int(end_time * sr)
@@ -184,21 +227,27 @@ def get_audio_chunk(audio, sr, start_time, chunk_len):
 class MDBDataset(torch.utils.data.Dataset):
 
     def __init__(self, 
-                path_to_dataset='/home/hugo/data/medleydb',
+                path_to_dataset='/home/hugo/CHONK/data/medleydb',
                 sr=48000, transform=None, train=True, 
-                chunk_len=1, random_seed=420): 
+                chunk_len=1, random_seed=4, hop_len=0.1): 
         self.sr = sr
         self.transform = transform
         self.chunk_len = chunk_len # in seconds
+        self.hop_len = hop_len
+
+        # get the split (for generating metadata)
+        self.splits = mdb.utils.artist_conditional_split(test_size=0.15, num_splits=1, 
+                                                random_state=random_seed)[0]
 
         # define metadata path
         path_to_metadata = os.path.join(
-            path_to_dataset, f'medleydb-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-npy.csv')
+            path_to_dataset, f'medleydb-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy.csv')
 
         # if we don't have the metadata, we need to generate it. 
         if not os.path.exists(path_to_metadata):
             print('generating dataset and metadata')
-            self.metadata = generate_medleydb_metadata(chunk_len=self.chunk_len, sr=self.sr)
+            self.metadata = generate_medleydb_metadata(chunk_len=self.chunk_len, sr=self.sr, hop_len=self.hop_len, 
+                                                        splits=self.splits, transform_train=True)
             
             print('done generating dataset and metadata')
             pd.DataFrame(self.metadata).to_csv(path_to_metadata, index=False)
@@ -206,20 +255,21 @@ class MDBDataset(torch.utils.data.Dataset):
             print(f'found metadata: {path_to_metadata}')
             self.metadata = pd.read_csv(path_to_metadata).to_dict('records')
 
+        # strip unwated characters
+        self.classes = self.get_classlist(self.metadata)
+
+        # remap classes
+        self.remap_classes(self.metadata, class_dict)
+
         # only keep train/test metadata, if train is not NOne
         if train is not None:
             self.filter_train_test_split(train=train, seed=random_seed)
-        
-        # strip unwated characters
-        for e in self.metadata:
-            e['instrument'] = str(e['instrument'].strip('[]\''))
-        self.classes = list(set([e['instrument'] for e in self.metadata]))
-        
-        # sort in alphabetical order
-        self.classes.sort()
 
-        # remap classes
-        self.remap_classes(class_dict)
+        # filter out all classes with 'other' tag
+        self.metadata = [e for e in self.metadata if not e['instrument'] == 'other']
+        self.classes = self.get_classlist(self.metadata)
+
+        print(self.get_class_frequencies())
 
         self.class_weights = np.array([1/pair[1] for pair in self.get_class_frequencies()])
         self.class_weights = self.class_weights / max(self.class_weights)
@@ -257,20 +307,101 @@ class MDBDataset(torch.utils.data.Dataset):
 
         return item
 
-    def filter_train_test_split(self, train=True, seed=420):
+    def get_classlist(self, metadata):
+        for e in metadata:
+            e['instrument'] = str(e['instrument'].strip('[]\''))
+        classes = list(set([e['instrument'] for e in metadata]))
+        classes.sort()
+
+        return classes
+
+    def filter_train_test_split(self, train=True, seed=429):
         """ filter self.metadata and only keep  the classes belonging 
         to an artist conditional split provided my mdbutils.
         the point of this is to keep us from using samples belonging to the same
         song for both training and validaton
         """
-        splits = mdb.utils.artist_conditional_split(test_size=0.15, num_splits=1, 
-                                                random_state=seed)
+        splits = self.splits
         key = 'train' if train else 'test'
-        splits = splits[0][key]
 
-        self.metadata = [e for e in self.metadata if e['trackid'] in splits]
+        train_metadata = [e for e in self.metadata if e['track_id'] in splits['train']]
+        test_metadata = [e for e in self.metadata if e['track_id'] in splits['test']]
 
-    def remap_classes(self, class_dict):
+        train_classes = self.get_classlist(train_metadata)
+        test_classes = self.get_classlist(test_metadata)
+
+        # find out what classes are missing
+        missing_test_classes = []
+        for c in train_classes:
+            if c not in test_classes:
+                missing_test_classes.append(c)
+
+        # print(f'classes missing from test data:')
+        # print(missing_test_classes)
+
+        missing_train_classes = []
+        for c in test_classes:
+            if c not in train_classes:
+                missing_train_classes.append(c)
+
+        # print(f'classes missing from train data:')
+        # print(missing_train_classes)
+
+        # first, remap missing classes in train set to other
+        soft_remap = {
+            
+            'clarinet': 'clarinet', 
+            'saxophone': 'saxophone', 
+            'drum': 'drum set', 
+            'flute': 'flute', 
+            'trombone': 'trombone', 
+            'piano': 'piano',
+            'male': 'male vocalist'}
+
+        hard_remap = {}
+        for classlist in [missing_train_classes, missing_test_classes]:
+            for c in classlist:
+                for cand in soft_remap:
+                    # if we can find the key in the string
+                    # then remap that class to the more general term
+                    remapped = False
+                    if cand in c:
+                        hard_remap[c] = soft_remap[cand]
+                        remapped = True
+                if not remapped:
+                    hard_remap[c] = 'other'
+        
+        self.remap_classes(train_metadata, hard_remap)
+        self.remap_classes(test_metadata, hard_remap)
+
+        if key == 'train':
+            self.metadata = train_metadata
+            self.classes = self.get_classlist(train_metadata)
+            train_classes = self.get_classlist(train_metadata)
+            test_classes = self.get_classlist(test_metadata)
+        else:
+            self.metadata = test_metadata
+            self.classes = self.get_classlist(test_metadata)
+            train_classes = self.get_classlist(train_metadata)
+            test_classes = self.get_classlist(test_metadata)
+
+        # find out what classes are missing
+        missing_test_classes = []
+        for c in train_classes:
+            if c not in test_classes:
+                missing_test_classes.append(c)
+
+        # print(f'FFclasses missing from test data:')
+        # print(missing_test_classes)
+        missing_train_classes = []
+        for c in test_classes:
+            if c not in train_classes:
+                missing_train_classes.append(c)
+
+        # print(f'classes missing from train data:')
+        # print(missing_train_classes)
+
+    def remap_classes(self, metadata, class_dict):
         """ remap instruments according to a dictionary provided
         that is, if 
             entry['instrument'] == 'electric guitar'
@@ -281,14 +412,15 @@ class MDBDataset(torch.utils.data.Dataset):
 
             then entry['instrument'] will be changed to 'guitar'
         """
-        for idx, c in enumerate(self.classes):
+        classes = self.get_classlist(metadata)
+        for idx, c in enumerate(classes):
             if c in class_dict.keys():
-                self.classes[idx] = class_dict[c]
+                classes[idx] = class_dict[c]
 
-        self.classes = list(set(self.classes))
-        self.classes.sort()
+        classes = list(set(classes))
+        classes.sort()
 
-        for entry in self.metadata:
+        for entry in metadata:
             entry['instrument'] = entry['instrument'].strip('[]\'')
             if entry['instrument'] in class_dict.keys():
                 entry['instrument'] = class_dict[entry['instrument']]
@@ -320,18 +452,20 @@ class MDBDataModule(pl.LightningDataModule):
         self.collate_fn = CollateAudio(self.sr)
         
     def load_dataset(self):
-        path = os.path.expanduser('~/data/slakh2100_flac')
+        path = os.path.expanduser('~/CHONK/data/slakh2100_flac')
         self.train_data = MDBDataset(sr=self.sr, train=True, chunk_len=1, 
-                                random_seed=420)
+                                random_seed=4)
+        
+        self.dataset = self.train_data
 
         self.val_data = MDBDataset(sr=self.sr, train=False, chunk_len=1, 
-                                random_seed=420)
+                                random_seed=4)
         
         self.test_data = MDBDataset(sr=self.sr, train=False, chunk_len=1, 
-                                random_seed=420)
+                                random_seed=4)
 
     def _load_dataset(self):
-        path = os.path.expanduser('~/data/slakh2100_flac')
+        path = os.path.expanduser('~/CHONK/data/slakh2100_flac')
         self.dataset = MDBDataset()
 
         splits = [int(ratio*len(self.dataset)) for ratio in (0.7, 0.2, 0.1)]
@@ -406,9 +540,27 @@ class CollateAudio:
         return data
 
 if __name__ == "__main__":
+    # find a random split that maximizes overlap between instrument classes
     import time
-    dataset = MDBDataset(train=True)
-    print(dataset.get_class_frequencies())
+    train_dataset = MDBDataset(train=True, random_seed=4)
+    # print([p for p in dataset.get_class_frequencies()])
 
-    dataset = MDBDataset(train=False)
-    print(dataset.get_class_frequencies())
+    val_dataset = MDBDataset(train=False, random_seed=4)
+    # print([p for p in dataset.get_class_frequencies()])
+
+    
+    # scoreboard = {}
+    # for seed in range(50):
+    #     train_dataset = MDBDataset(train=True, random_seed=seed)
+    #     val_dataset = MDBDataset(train=False, random_seed=seed)
+
+    #     missing_val_classes = []
+    #     for c in train_dataset.classes:
+    #         if c not in val_dataset.classes:
+    #             missing_val_classes.append(c)
+        
+    #     scoreboard[seed] = len(missing_val_classes)
+
+    # scoreboard = sorted(scoreboard.items(), key=lambda x: x[1])
+    # print(scoreboard)
+    

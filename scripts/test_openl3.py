@@ -36,7 +36,7 @@ openl3_torch.eval()
 import torchaudio
 import instrument_recognition.utils.audio_utils as audio_utils
 # random audio
-audio, sr = torchaudio.load('/home/hugo/data/philharmonia/all-samples/banjo/banjo_Cs5_very-long_forte_normal.mp3')
+audio, sr = torchaudio.load('/home/hugo/CHONK/data/philharmonia/all-samples/banjo/banjo_Cs5_very-long_forte_normal.mp3')
 audio = audio_utils.resample(audio.unsqueeze(0), sr, 48000).numpy()[:, :, 0:48000]
 audio = torch.randn(1000, 1, 48000).numpy()
 

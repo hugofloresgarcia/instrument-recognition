@@ -49,7 +49,7 @@ class OpenMicDataModule(pl.LightningDataModule):
 class OpenMicDataset(torch.utils.data.Dataset):
 
     def __init__(self, 
-                path_to_data='../data/openmic-2018', 
+                path_to_data='../CHONK/data/openmic-2018', 
                 train=True):
         print('initing openmic dataset')
         self.path_to_data = path_to_data

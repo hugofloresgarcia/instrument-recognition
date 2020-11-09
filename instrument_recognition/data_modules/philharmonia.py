@@ -115,7 +115,7 @@ class CollateAudio:
 # TODO: I NEED TO REFACTOR ALL MY DATA MODULES SO THEY ACTUALLY WORK
 class PhilharmoniaSet(Dataset):
     def __init__(self, 
-                dataset_path: str = './data/philharmonia', 
+                dataset_path: str = './CHONK/data/philharmonia', 
                 classes: tuple = None,
                 download = True, 
                 load_audio: bool = True):
@@ -196,7 +196,7 @@ class PhilharmoniaSet(Dataset):
 
     def _retrieve_entry(self, entry):
         path_to_audio = '../' + entry['path_to_audio']
-        # path_to_audio = path_to_audio.replace('./data/philharmonia', self.dataset_path)
+        # path_to_audio = path_to_audio.replace('./CHONK/data/philharmonia', self.dataset_path)
         
         filename = path_to_audio.split('/')[-1]
 
@@ -341,7 +341,7 @@ class PhilharmoniaDataModule(pl.LightningDataModule):
     
     def load_dataset(self):
         dataset = PhilharmoniaSet(
-            dataset_path='/home/hugo/data/philharmonia', 
+            dataset_path='/home/hugo/CHONK/data/philharmonia', 
             classes='no_percussion', 
             download=True,
             load_audio=self.load_audio
@@ -403,7 +403,7 @@ class PhilharmoniaDataModule(pl.LightningDataModule):
 
 if __name__ == "__main__":
     dataset = PhilharmoniaSet(
-            dataset_path='/home/hugo/data/philharmonia', 
+            dataset_path='/home/hugo/CHONK/data/philharmonia', 
             classes='no_percussion', 
             download=True,
             load_audio=False

@@ -4,11 +4,11 @@ import philharmonia_dataset
 import numpy as np
 
 def make_soundscapes():
-    generate_soundscape(foreground_folder='../data/philharmonia-synthesized/foreground', 
-                        background_folder='../data/philharmonia-synthesized/background')
+    generate_soundscape(foreground_folder='../CHONK/data/philharmonia-synthesized/foreground', 
+                        background_folder='../CHONK/data/philharmonia-synthesized/background')
 
 def generate_soundscape(foreground_folder, background_folder, 
-                        seed=42, parent_dir='../data/philharmonia-synthesized/soundscapes/', 
+                        seed=42, parent_dir='../CHONK/data/philharmonia-synthesized/soundscapes/', 
                         soundscape_duration=10, sample_rate=48000, ref_db=-40, 
                         num_soundscapes=750, num_events_mean=25, num_events_std=5):
 
@@ -101,8 +101,8 @@ def make_background_soundscapes():
                 list_of_output_paths.append(output_path)
 
     # # for debug
-    # list_of_audio_paths = ['/Users/hugoffg/Documents/lab/music_sed/data/philharmonia-synthesized/background-src/01.Carmina Burana O Fortruna.flac']
-    # list_of_output_paths = ['/Users/hugoffg/Documents/lab/music_sed/data/philharmonia-synthesized/background-src/01.Carmina Burana O Fortruna.mp3']
+    # list_of_audio_paths = ['/Users/hugoffg/Documents/lab/music_sed/CHONK/data/philharmonia-synthesized/background-src/01.Carmina Burana O Fortruna.flac']
+    # list_of_output_paths = ['/Users/hugoffg/Documents/lab/music_sed/CHONK/data/philharmonia-synthesized/background-src/01.Carmina Burana O Fortruna.mp3']
 
     # done collecting! now, do all the hard work
     transform_background_audio(list_of_audio_paths, list_of_output_paths)

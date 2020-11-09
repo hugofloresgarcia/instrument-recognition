@@ -248,7 +248,7 @@ def find_silence(metadata, keep=False):
 class SlakhDataset(Dataset):
 
     def __init__(self, 
-                path_to_dataset='/home/hugo/data/slakh2100_flac',
+                path_to_dataset='/home/hugo/CHONK/data/slakh2100_flac',
                 subset='train', 
                 classes=None, # WARNING: class subsets not implemented yet
                 audio_length=1, 
@@ -477,7 +477,7 @@ class SlakhDataModule(pl.LightningDataModule):
         self.collate_fn = CollateAudio(self.sr)
         
     def load_dataset(self):
-        path = os.path.expanduser('~/data/slakh2100_flac')
+        path = os.path.expanduser('~/CHONK/data/slakh2100_flac')
         self.train_data = SlakhDataset(
             path_to_dataset=path, 
             classes=None, 
