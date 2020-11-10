@@ -149,9 +149,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         return F.cross_entropy(yhat, y, weight=self.class_weights)
 
     def preprocess(self, batch, train=False):
-        if len(audio) == 1:
-            audio = torch.cat([batch['X'], batch['X']], dim=0)
-            labels = torch.cat([batch['y'], batch['y']], dim=0)
+        if len(batch['X']) == 1:
+            batch['X'] = torch.cat([batch['X'], batch['X']], dim=0)
+            batch['y'] = torch.cat([batch['y'], batch['y']], dim=0)
 
         # batch transforms are now offline
         if train and self.hparams.online_transforms:
@@ -161,7 +161,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def _main_step(self, batch, batch_idx, train=False):
         if not (self.hparams.mixup and train):
-            batch = self.preprocess(batch['X'], batch['y'], train=train)
+            batch = self.preprocess(batch, train=train)
             X, y = batch['X'], batch['y']
             # forward pass through model
             yhat = self.model(X)
@@ -181,9 +181,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         # get result of forward pass
-        result = self._main_step(batch, batch_idx, 
-                                mixup=self.hparams.mixup,
-                                train=True)
+        result = self._main_step(batch, batch_idx, train=True)
 
         # update the batch with the result 
         batch.update(result)
@@ -195,7 +193,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         if batch_idx % 100 == 0:
             self.log_random_example(batch, title='train-sample')
         
-        self.log_sklearn_metrics(yhat, y, prefix='train')) 
+        self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
 
         return result['loss']
 
@@ -216,7 +214,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         # metric logging
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
         self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
-        self.log_sklearn_metrics(yhat, y, prefix='val')
+        self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='val')
 
         return result
 
@@ -236,7 +234,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # metric logging
         self.log('loss/test', result['loss'], logger=True)     
-        self.log_sklearn_metrics(yhat, y, prefix='test')
+        self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='test')
 
         return result
     
@@ -419,7 +417,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 def train_instrument_detection_task(hparams, model):
     from test_tube import Experiment
     
-    # see everything!!!
+    # seed everything!!!
     pl.seed_everything(hparams.random_seed)
 
     # set the gpu hparam (important for some models)

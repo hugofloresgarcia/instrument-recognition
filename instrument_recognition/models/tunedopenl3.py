@@ -25,22 +25,22 @@ class TunedOpenL3(pl.LightningModule):
         self.openl3 = OpenL3Mel128(
             weight_file='./weights/openl3/openl3_music_6144_no_mel_layer_pytorch_weights', 
             input_shape=(1, self.hparams.sr), 
-            # maxpool_kernel=(16, 24), #512
-            maxpool_kernel=(4, 8), #6144
+            maxpool_kernel=(16, 24), #512
+            # maxpool_kernel=(4, 8), #6144
             maxpool_stride=(4, 8), 
             use_kapre=self.hparams.use_kapre)
         # self.flatten = nn.Flatten()
         self.fc_seq = nn.Sequential(
                 nn.Flatten(),
-                # nn.BatchNorm1d(6144, momentum=0.5), #track_running_stats=False ), 
-                nn.Linear(6144, 2048), 
-                nn.ReLU(),
-                nn.Dropout(p=self.hparams.dropout),
+                # # nn.BatchNorm1d(6144, momentum=0.5), #track_running_stats=False ), 
+                # nn.Linear(6144, 2048), 
+                # nn.ReLU(),
+                # nn.Dropout(p=self.hparams.dropout),
 
-                # nn.BatchNorm1d(2048, momentum=0.5), #track_running_stats=False), 
-                nn.Linear(2048, 512), 
-                nn.ReLU(),
-                nn.Dropout(p=self.hparams.dropout),
+                # # nn.BatchNorm1d(2048, momentum=0.5), #track_running_stats=False), 
+                # nn.Linear(2048, 512), 
+                # nn.ReLU(),
+                # nn.Dropout(p=self.hparams.dropout),
 
                 # nn.BatchNorm1d(512, momentum=0.5), #track_running_stats=False),
                 nn.Linear(512, 128),

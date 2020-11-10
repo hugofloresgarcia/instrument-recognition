@@ -101,11 +101,10 @@ class_dict = {
 }
 
 # rack up the workers
-from multiprocessing import Pool, Queue
-
-q = Queue()
+from multiprocessing import Pool
 
 def process_mtrack(args):
+    metadata = []
     mtrack, chunk_len, sr, hop_len, splits, transform_train = args
     # figure out whether we are going to add FX to this track or not
     if splits is not None:
@@ -119,16 +118,17 @@ def process_mtrack(args):
         path_to_audio = stem.audio_path
         audio, sr = librosa.load(path_to_audio, mono=True, sr=sr)
 
-        # TRIM ALL SILENCE OFF AUDIO
         tfm = sox.Transformer()
         tfm.silence(min_silence_duration=0.3, buffer_around_silence=False)
         audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
-
+        audio_len = len(audio)
+        
         # determine how many 1 second chunks we can get out of this
-        n_chunks = int(np.ceil(len(audio)/(chunk_len*sr)))
+        n_chunks = int(np.ceil(audio_len/(chunk_len*sr)))
 
         # iterate through chunks
         for start_time in np.arange(0, n_chunks, hop_len):
+
             # zero pad 
             audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
 
@@ -136,23 +136,27 @@ def process_mtrack(args):
             # SEND them bois to CHONK
             audio_chunk_path = stem.audio_path.replace('data/medleydb/Audio', 
                         f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
-            audio_chunk_path = audio_chunk_path.replace('.wav', f'_{start_time}.npy')
+            audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
             
             os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
             print(f'saving {audio_chunk_path}')
 
-            if transform_audio:
-                audio_chunk = torch.from_numpy(audio_chunk)
-                audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
-                    sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
-                audio_chunk = audio_chunk.numpy()
+            if not os.path.exists(audio_chunk_path):
+                if transform_audio:
+                    audio_chunk = torch.from_numpy(audio_chunk)
+                    audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
+                        sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
+                    audio_chunk = audio_chunk.numpy()
 
-            np.save(audio_chunk_path, audio_chunk)
+                np.save(audio_chunk_path, audio_chunk)
+            else:
+                print(f'already found: {audio_chunk_path}')
 
             entry = dict(
                 # the definite stuff
                 path_to_audio=audio_chunk_path, 
-                instrument=stem.instrument, 
+                instrument_list=stem.instrument, 
+                instrument=stem.instrument[0],
                 duration=chunk_len, 
                 start_time=start_time, 
                 
@@ -161,8 +165,9 @@ def process_mtrack(args):
                 stem_idx=stem.stem_idx, 
                 audio_transformed=transform_audio)
             
-            # metadata.append(entry)
-            q.put(entry)
+            metadata.append(entry)
+
+    return metadata
 
 def generate_medleydb_metadata(chunk_len=1, sr=48000, hop_len=1.0, splits=None, transform_train=True):
     """
@@ -184,25 +189,26 @@ def generate_medleydb_metadata(chunk_len=1, sr=48000, hop_len=1.0, splits=None, 
             List of time, activation confidence pairs
         
     """
-    metadata = []
-
     # load all tracks
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
-    mtrack_generator = tqdm(mtrack_generator, desc='generating medleydb metadata')
-
 
     pool = Pool()
 
     args = []
     for mtrack in mtrack_generator:
         args.append((mtrack, chunk_len, sr, hop_len, splits, transform_train))
+        
+    print(len(args))
 
     # do the thing!
-    pool.map(process_mtrack, args)
-    pool.join()
+    metadata = pool.map(process_mtrack, args)
+    metadata = [entry for submetadata in metadata for entry in submetadata]
     pool.close()
+    pool.join()
+    print(f'converting to list..')
 
-    metadata = list(q.queue)
+    print(len(metadata))
+    # exit()
 
     return metadata
 
@@ -229,7 +235,7 @@ class MDBDataset(torch.utils.data.Dataset):
     def __init__(self, 
                 path_to_dataset='/home/hugo/CHONK/data/medleydb',
                 sr=48000, transform=None, train=True, 
-                chunk_len=1, random_seed=4, hop_len=0.1): 
+                chunk_len=1, random_seed=4, hop_len=0.2): 
         self.sr = sr
         self.transform = transform
         self.chunk_len = chunk_len # in seconds
