@@ -180,6 +180,13 @@ class InstrumentDetectionTask(pl.LightningModule):
                     yhat=yhat.detach().cpu(), X=X.detach().cpu())
 
     def training_step(self, batch, batch_idx):
+        # this works like an mf charm and it do't need no callbacks
+        if self.current_epoch < self.hparams.openl3_unfreeze_epoch \
+                                and self.hparams.openl3_freeze:
+            self.model.openl3.freeze()
+        else:
+            self.model.openl3.unfreeze()
+
         # get result of forward pass
         result = self._main_step(batch, batch_idx, train=True)
 
@@ -190,8 +197,10 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log('loss/train', result['loss'], on_step=True)
 
         # pick and log sample audio
-        if batch_idx % 100 == 0:
+        if batch_idx % 250 == 0:
+            print(f'LOGGING RANDOM EXAMPLE')
             self.log_random_example(batch, title='train-sample')
+            # print(f'done:)')
         
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
 
@@ -209,7 +218,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
-            self.log_random_example(batch, title='train-sample')
+            self.log_random_example(batch, title='val-sample')
 
         # metric logging
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
@@ -230,7 +239,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
-            self.log_random_example(batch, title='train-sample')
+            self.log_random_example(batch, title='test-sample')
 
         # metric logging
         self.log('loss/test', result['loss'], logger=True)     
@@ -240,10 +249,14 @@ class InstrumentDetectionTask(pl.LightningModule):
     
     # OPTIM
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.learning_rate, weight_decay=1e-5)
+        optimizer = torch.optim.Adam(
+            # add this lambda so it doesn't crash if part of the model is frozen
+            filter(lambda p: p.requires_grad, self.parameters()),
+            lr=self.hparams.learning_rate, 
+            weight_decay=1e-5)
         scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min'), 
-            'monitor': 'loss_val'
+            'monitor': 'loss/train'
         }
         return [optimizer], [scheduler]
 
@@ -344,10 +357,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         
 
         # log
-        self.logger.experiment.add_figure(
-            layer,
-            fig, 
-            self.global_step)
+        self.logger.experiment.add_figure(layer, fig, self.global_step)
 
         plt.close(fig)
 
@@ -409,8 +419,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'precision/{prefix}/epoch', precision_score(y, yhat, average='micro'))
         self.log(f'recall/{prefix}/epoch', recall_score(y, yhat, average='micro'))
         self.log(f'fscore/{prefix}/epoch', fbeta_score(y, yhat, average='micro', beta=1))
-        self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.current_epoch, dataformats='HWC')
-        self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.current_epoch, dataformats='HWC')
+        self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
+        self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
 
         return outputs
 
@@ -473,8 +483,7 @@ def train_instrument_detection_task(hparams, model):
         log_gpu_memory=True, 
         gpus=gpus,
         # profiler=pl.profiler.AdvancedProfiler(), 
-        gradient_clip_val=1, 
-        )
+        gradient_clip_val=1)
 
     if hparams.gpuid is not None:
         hparams.gpus = 1

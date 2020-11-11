@@ -52,14 +52,20 @@ class TunedOpenL3(pl.LightningModule):
 
         # set up unfreeze callbacks
         if self.hparams.openl3_freeze:
-            self.openl3.freeze()
-            # did this before version 9 (version 8 didn't have is_frozen)
+            # self.openl3.freeze()
             self.is_frozen = True
             self.callback_list = [LayerUnfreezeCallback(self.openl3, self.hparams.openl3_unfreeze_epoch)] 
         else:
             self.callback_list =  []
 
     def forward(self, x):
+        # if self.is_frozen:
+        #     self.freeze()
+        #     self.eval()
+        # else:
+        #     self.unfreeze()
+        #     self.train()
+        
         if self.openl3.use_kapre:
             # NOTE: still need to do pass thru filters
             # to appease the hooks. so it will be twice a slow
