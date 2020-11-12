@@ -190,7 +190,15 @@ class SlakhDataset(Dataset):
         self.class_weights = self.class_weights / max(self.class_weights)
         print(self.get_class_frequencies())
         [print(f'{c}-{w}') for c, w in zip(self.classes, self.class_weights)]
-             
+
+        self.remap_classes_to_mdb()
+
+    def get_str_class_repr(self):
+        str_class_repr = ''
+        for c in self.classes: 
+            str_class_repr += f'{c},\n'
+        return str_class_repr  
+    
     def check_metadata(self):
         missing_files = []
         for entry in self.metadata:
@@ -288,6 +296,24 @@ class SlakhDataset(Dataset):
         classes.sort()
 
         return classes
+
+    def remap_classes_to_mdb(self):
+        mapping = {
+            'Bass',
+            'Brass',
+            'Chromatic Percussion',
+            'Drums',
+            'Guitar',
+            'Organ',
+            'Piano',
+            'Pipe',
+            'Reed',
+            'Strings',
+            'Strings (continued)': 'Strings', 
+            'Synth Lead': 'Synth', 
+            'Synth Pad': 'Synth', 
+        }
+        self.remap_classes(self.metadata, mapping)
 
 class SlakhDataModule(pl.LightningDataModule):
 
