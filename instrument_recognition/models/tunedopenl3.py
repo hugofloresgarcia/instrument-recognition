@@ -65,12 +65,11 @@ class TunedOpenL3(pl.LightningModule):
         # else:
         #     self.unfreeze()
         #     self.train()
-        
         if self.openl3.use_kapre:
             # NOTE: still need to do pass thru filters
             # to appease the hooks. so it will be twice a slow
             f = self.filters(x)
-            spec = self.openl3.melspec(x, gpu=self.hparams.gpus)
+            spec = self.openl3.melspec(x, gpuid=self.hparams.gpuid)
             x = spec.type_as(x)
         else:
             x = self.filters(x)

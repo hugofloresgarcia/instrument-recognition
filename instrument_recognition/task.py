@@ -180,17 +180,17 @@ class InstrumentDetectionTask(pl.LightningModule):
                     yhat=yhat.detach().cpu(), X=X.detach().cpu())
 
     def training_step(self, batch, batch_idx):
-        # this works like an mf charm and it do't need no callbacks
-        if self.current_epoch < self.hparams.openl3_unfreeze_epoch \
-                                and self.hparams.openl3_freeze:
-            self.model.openl3.freeze()
-        else:
-            self.model.openl3.unfreeze()
+        # # this works like an mf charm and it do't need no callbacks
+        # if self.current_epoch < self.hparams.openl3_unfreeze_epoch \
+        #                         and self.hparams.openl3_freeze:
+        #     self.model.openl3.freeze()
+        # else:
+        #     self.model.openl3.unfreeze()
 
         # get result of forward pass
         result = self._main_step(batch, batch_idx, train=True)
 
-        # update the batch with the result 
+        # update the batch with the result
         batch.update(result)
 
         # train logging

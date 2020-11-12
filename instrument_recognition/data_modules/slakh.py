@@ -58,37 +58,60 @@ def _process_slakh_track(args):
         audio_len = len(audio)
 
         n_chunks = int(np.ceil(audio_len/(chunk_len*sr)))
+        audio = audio_utils.zero_pad(audio, n_chunks * sr)
+
+        # format save path
+        # send them bois to CHONK
+        audio_npy_path = path_to_audio.replace('slakh2100_flac', 
+                                f'slakh_sr-{sr}')
+        audio_npy_path = audio_npy_path.replace('.flac', f'.npy')
+
+        # make subdirs if needed
+        os.makedirs(os.path.dirname(audio_npy_path), exist_ok=True)
+        print(f'saving {audio_npy_path}')
+
+        if not os.path.exists(audio_npy_path):
+            if transform_audio:
+                audio = torch.from_numpy(audio)
+                audio = random_transform(audio.unsqueeze(0).unsqueeze(0), 
+                    sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
+                audio = audio.numpy()
+
+            np.save(audio_npy_path, audio)
+        else:
+            print(f'already found: {audio_npy_path}')
 
         for start_time in np.arange(0, n_chunks, hop_len):
             start_time = np.around(start_time, 4)
-            # zero pad 
-            audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
-            audio_chunk_path = path_to_audio.replace('slakh2100_flac', 
-                                f'slakh_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
-            audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
-            audio_chunk_path = audio_chunk_path.replace('.mp3', f'/{start_time}.npy')
-            audio_chunk_path = audio_chunk_path.replace('.flac', f'/{start_time}.npy')
+            # # zero pad 
+            # audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
+            # audio_chunk_path = path_to_audio.replace('slakh2100_flac', 
+            #                     f'slakh_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
+            # audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
+            # audio_chunk_path = audio_chunk_path.replace('.mp3', f'/{start_time}.npy')
+            # audio_chunk_path = audio_chunk_path.replace('.flac', f'/{start_time}.npy')
 
-            os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-            print(f'saving {audio_chunk_path}')
+            # os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
+            # print(f'saving {audio_chunk_path}')
 
-            if not os.path.exists(audio_chunk_path):
-                if transform_audio:
-                    audio_chunk = torch.from_numpy(audio_chunk)
-                    audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
-                        sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
-                    audio_chunk = audio_chunk.numpy()
+            # if not os.path.exists(audio_chunk_path):
+            #     if transform_audio:
+            #         audio_chunk = torch.from_numpy(audio_chunk)
+            #         audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
+            #             sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
+            #         audio_chunk = audio_chunk.numpy()
 
-                np.save(audio_chunk_path, audio_chunk)
-            else:
-                print(f'already found: {audio_chunk_path}')
+            #     np.save(audio_chunk_path, audio_chunk)
+            # else:
+            #     print(f'already found: {audio_chunk_path}')
 
 
             entry = dict(
-                path_to_audio=audio_chunk_path, 
+                path_to_audio=audio_npy_path, 
                 instrument=instrument, 
                 duration=chunk_len, 
-                start_time=start_time)
+                start_time=start_time, 
+                sr=sr)
 
             slakh_metadata.append(entry)
 
@@ -111,7 +134,6 @@ def get_audio_chunk(audio, sr, start_time, chunk_len):
     if not len(audio) / sr == chunk_len * sr:
         chunked_audio = audio_utils.zero_pad(chunked_audio, sr * chunk_len)
     return chunked_audio
-
 
 def read_piano_roll(path_to_midi):
     mtrack = pypianoroll.Multitrack(path_to_midi)
@@ -267,8 +289,8 @@ class SlakhDataset(Dataset):
 
     def __init__(self, 
                 path_to_dataset='/home/hugo/CHONK/data/slakh2100_flac',
-                subset='train', classes=None, chunk_len=1, hop_len=0.5, 
-                sr=48000): # audio length in seconds
+                subset='train', classes=None, chunk_len=1, hop_len=1, 
+                sr=48000, transform=None): # audio length in seconds
         subsets = ('train', 'validation', 'test')
         assert subset in subsets, f'subset provided not in {subsets}'
         
@@ -282,8 +304,9 @@ class SlakhDataset(Dataset):
         self.chunk_len = chunk_len
         self.hop_len = hop_len
         self.sr = sr
+        self.transform = transform
 
-        transform_audio = True if subset == 'train' else False
+        # transform_audio = True if subset == 'train' else False
         self.has_npy = False
 
         path_to_npz_metadata = os.path.join(self.path_to_data, 
@@ -294,7 +317,7 @@ class SlakhDataset(Dataset):
         else:  
             self.metadata = generate_slakh_npz(self.path_to_data,  instruments=classes,
                                             chunk_len=self.chunk_len, hop_len=self.hop_len, sr=self.sr, 
-                                            transform_audio=transform_audio)
+                                            transform_audio=False)
             pd.DataFrame(self.metadata).to_csv(path_to_npz_metadata, index=False)
 
         self.classes = list(set([e['instrument'] for e in self.metadata]))
@@ -314,43 +337,6 @@ class SlakhDataset(Dataset):
         assert len(missing_files) == 0, 'some files were missing in the dataset.\
              delete metadata file and download again, or delete missing entries from metadata'
 
-    def save_npz_dataset(self, metadata, sr=48000, audio_len=1):
-        from instrument_recognition.models.timefreq import Melspectrogram
-        spectrogram = Melspectrogram(sr=sr).cuda()
-        dataloader = DataLoader(self, batch_size=1, shuffle=False, collate_fn=CollateAudio(sr), num_workers=12)
-        prog_bar = tqdm(enumerate(dataloader), total=len(metadata))
-        print('computing spectrograms')
-
-        error = False
-        # try:
-        for idx, full_entry in prog_bar:
-            entry = metadata[idx]
-            # no dataloader funny business
-            # print(f"{entry['path_to_audio']}-{full_entry['path_to_audio']}")
-            assert entry['path_to_audio'] == full_entry['path_to_audio'][0], f"{entry['path_to_audio']}-{full_entry['path_to_audio'][0]}"
-            audio = full_entry['X']
-            audio_chunk = audio.detach().view(-1).numpy()
-
-            audio_chunk_path = entry['path_to_audio'].replace('slakh2100_flac', 
-                        f'slakh2100_chunklen-{self.chunk_len}_sr-{sr}')
-            audio_chunk_path = audio_chunk_path.replace('.flac', f'_{entry["start_time"]}')
-            
-            os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-            print(f'saving {audio_chunk_path}')
-            np.save(audio_chunk_path, audio_chunk)
-
-            entry['path_to_audio'] = audio_chunk_path
-            print(full_entry['instrument'][0])
-            print(entry['instrument'])
-            assert entry['instrument'] == full_entry['instrument'][0] or full_entry['instrument'][0] == 'silence'
-
-            if not full_entry['instrument'][0] == 'silence':
-                metadata[idx] = entry
-        # except Exception as e:
-        #     print(f'an exception occured: {e}. trying to save whats left..')
-        #     error = True
-        return metadata, error
-
     def get_class_frequencies(self):
         """
         return a tuple with unique class names and their number of items
@@ -364,14 +350,23 @@ class SlakhDataset(Dataset):
         return tuple(classes)
 
     def __getitem__(self, index):
-        entry = self.metadata[idx]
+        entry = self.metadata[index]
         # load audio using numpy
-        audio = np.load(entry['path_to_audio'], allow_pickle=False)
-
-        audio = torch.from_numpy(audio)
-
-        # add channel dimensions
-        audio = audio.unsqueeze(0)
+        audio = np.load(entry['path_to_audio'],mmap_mode='r', allow_pickle=False)
+        # start_sample = entry['start_time'] * entry['sr']
+        # audio_len = entry['duration'] * entry['sr']
+        # audiomm = np.memmap(entry['path_to_audio'], np.float32, 'c', offset=start_sample, shape=(audio_len))
+        # print(audiomm.shape)
+        # print(id(audiomm))
+        start_sample = entry['start_time'] * entry['sr']
+        end_sample = start_sample + entry['duration'] * entry['sr']
+        audio = audio[start_sample:end_sample]
+        audio = torch.from_numpy(audio).float()
+        # audio = torch.zeros(48000)
+        # del audiomm
+        # print(audio.shape)
+        # print(id(audio))
+        # exit()
 
         # apply transform
         audio = self.transform(audio) if self.transform is not None else audio
@@ -397,6 +392,38 @@ class SlakhDataset(Dataset):
     
     def get_onehot(self, labels):
         return np.array([1 if l in labels else 0 for l in self.classes])
+
+    def remap_classes(self, metadata, class_dict):
+        """ remap instruments according to a dictionary provided
+        that is, if 
+            entry['instrument'] == 'electric guitar'
+            
+            and
+
+            class_dict['electric guitar'] = 'guitar'
+
+            then entry['instrument'] will be changed to 'guitar'
+        """
+        classes = self.get_classlist(metadata)
+        for idx, c in enumerate(classes):
+            if c in class_dict.keys():
+                classes[idx] = class_dict[c]
+
+        classes = list(set(classes))
+        classes.sort()
+
+        for entry in metadata:
+            entry['instrument'] = entry['instrument'].strip('[]\'')
+            if entry['instrument'] in class_dict.keys():
+                entry['instrument'] = class_dict[entry['instrument']]
+
+    def get_classlist(self, metadata):
+        for e in metadata:
+            e['instrument'] = str(e['instrument'].strip('[]\''))
+        classes = list(set([e['instrument'] for e in metadata]))
+        classes.sort()
+
+        return classes
 
 class SlakhDataModule(pl.LightningDataModule):
 

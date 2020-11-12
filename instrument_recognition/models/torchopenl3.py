@@ -86,11 +86,11 @@ class OpenL3Mel128(pl.LightningModule):
         self.audio_embedding_layer = self.__conv(2, name='audio_embedding_layer', in_channels=512, out_channels=512, kernel_size=(3, 3), stride=(1, 1), groups=1, bias=True)
         self.maxpool = nn.MaxPool2d(kernel_size=maxpool_kernel, stride=maxpool_stride, padding=0, ceil_mode=False)
 
-    def melspec(self, x, gpu=0):
+    def melspec(self, x, gpuid=0):
         if isinstance(x, torch.Tensor):
             x = x.detach().cpu().numpy()
         
-        if gpu > 0:
+        if gpuid is not None:
             spec = self._spec.predict(x)
             spec = torch.from_numpy(spec)
             spec = spec.permute(0, 3, 1, 2)
@@ -102,8 +102,6 @@ class OpenL3Mel128(pl.LightningModule):
         return spec
 
     def forward(self, x):
-        if self.is_frozen:
-            self.freeze()
         batch_normalization_1 = self.batch_normalization_1(x)
         conv2d_1_pad    = F.pad(batch_normalization_1, (1, 1, 1, 1))
         conv2d_1        = self.conv2d_1(conv2d_1_pad)

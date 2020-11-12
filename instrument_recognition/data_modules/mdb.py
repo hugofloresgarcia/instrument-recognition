@@ -130,7 +130,7 @@ def process_mtrack(args):
         # format save path
         # send them bois to CHONK
         audio_npy_path = stem.audio_path.replace('data/medleydb/Audio', 
-                    f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
+                    f'CHONK/data/medleydb/Audio_sr-{sr}')
         audio_npy_path = audio_npy_path.replace('.wav', f'.npy')
 
         # make subdirs if needed
@@ -176,17 +176,18 @@ def process_mtrack(args):
 
             entry = dict(
                 # the definite stuff
-                path_to_audio=audio_chunk_path, 
+                path_to_audio=audio_npy_path, 
                 instrument_list=stem.instrument, 
                 instrument=stem.instrument[0],
                 duration=chunk_len, 
                 start_time=start_time, 
+                sr=sr,
                 
                 # the extras
                 track_id=mtrack.track_id, 
                 stem_idx=stem.stem_idx, 
                 audio_transformed=transform_audio)
-            
+            print(entry)
             metadata.append(entry)
 
     return metadata
@@ -275,7 +276,7 @@ class MDBDataset(torch.utils.data.Dataset):
         if not os.path.exists(path_to_metadata):
             print('generating dataset and metadata')
             self.metadata = generate_medleydb_metadata(chunk_len=self.chunk_len, sr=self.sr, hop_len=self.hop_len, 
-                                                        splits=self.splits, transform_train=True)
+                                                        splits=self.splits, transform_train=False)
             
             print('done generating dataset and metadata')
             pd.DataFrame(self.metadata).to_csv(path_to_metadata, index=False)
@@ -309,9 +310,20 @@ class MDBDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         entry = self.metadata[idx]
         # load audio using numpy
-        audio = np.load(entry['path_to_audio'], allow_pickle=False)
-
-        audio = torch.from_numpy(audio)
+        # audio = np.load(entry['path_to_audio'], mmap_mode='r', allow_pickle=False)
+        start_sample = entry['start_time'] * entry['sr']
+        audio_len = entry['duration'] * entry['sr']
+        audiomm = np.memmap(entry['path_to_audio'],np.float32,  'r', offset=start_sample, shape=(audio_len))
+        # print(audiomm.shape)
+        # print(id(audiomm))
+        # start_sample = entry['start_time'] * entry['sr']
+        # end_sample = start_sample + entry['duration'] * entry['sr']
+        # audio = audio[start_sample:end_sample]
+        audio = torch.from_numpy(audiomm).clone()
+        del audiomm
+        # print(audio.shape)
+        # print(id(audio))
+        # exit()
 
         # add channel dimensions
         audio = audio.unsqueeze(0)
