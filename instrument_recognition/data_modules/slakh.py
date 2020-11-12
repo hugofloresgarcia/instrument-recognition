@@ -29,7 +29,9 @@ def _process_slakh_track(args):
     slakh_metadata = []
     track_path = os.path.join(path_to_dataset, tracks)
     if not os.path.isdir(track_path):
-        return
+        return []
+    if not os.path.exists(os.path.join(track_path, 'metadata.yaml')):
+        return []
     with open(os.path.join(track_path, 'metadata.yaml')) as f:
         metadata = yaml.full_load(f)
 
@@ -63,9 +65,9 @@ def _process_slakh_track(args):
             audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
             audio_chunk_path = path_to_audio.replace('slakh2100_flac', 
                                 f'slakh_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
-            audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}')
-            audio_chunk_path = audio_chunk_path.replace('.mp3', f'/{start_time}')
-            audio_chunk_path = audio_chunk_path.replace('.flac', f'/{start_time}')
+            audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
+            audio_chunk_path = audio_chunk_path.replace('.mp3', f'/{start_time}.npy')
+            audio_chunk_path = audio_chunk_path.replace('.flac', f'/{start_time}.npy')
 
             os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
             print(f'saving {audio_chunk_path}')
@@ -82,9 +84,6 @@ def _process_slakh_track(args):
                 print(f'already found: {audio_chunk_path}')
 
 
-            instrument = instrument
-            duration = chunk_len
-        
             entry = dict(
                 path_to_audio=audio_chunk_path, 
                 instrument=instrument, 
@@ -215,11 +214,6 @@ def generate_slakh_npz(path_to_dataset, instruments=None, chunk_len=1, hop_len=1
     pool.close()
     pool.join()
 
-    # report any broken stems
-    if not broken_stems == []:
-        print(f'the following files were not found: {broken_stems}')
-        print(f'total files: {len(broken_stems)}')
-
     return metadata
 
 def find_silence(metadata, keep=False):
@@ -274,7 +268,7 @@ class SlakhDataset(Dataset):
     def __init__(self, 
                 path_to_dataset='/home/hugo/CHONK/data/slakh2100_flac',
                 subset='train', classes=None, chunk_len=1, hop_len=0.5, 
-                sr=48000, generate_npz=True): # audio length in seconds
+                sr=48000): # audio length in seconds
         subsets = ('train', 'validation', 'test')
         assert subset in subsets, f'subset provided not in {subsets}'
         
@@ -290,19 +284,18 @@ class SlakhDataset(Dataset):
         self.sr = sr
 
         transform_audio = True if subset == 'train' else False
-        self.generate_npz = generate_slakh_npz(self.path_to_data,  instruments=classes,
-                                                chunk_len=self.chunk_len, hop_len=self.hop_len, sr=self.sr, 
-                                                transform_audio=transform_audio)
         self.has_npy = False
-        if self.generate_npz:
-            path_to_npz_metadata = os.path.join(self.path_to_data, 
-                f'slakh-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy.csv')
-            if os.path.exists(path_to_npz_metadata):
-                self.has_npy = True
-                self.metadata = pd.read_csv(path_to_npz_metadata).to_dict('records')
-            else:  
-                self.metadata = generate_
-                pd.DataFrame(self.metadata).to_csv(path_to_npz_metadata, index=False)
+
+        path_to_npz_metadata = os.path.join(self.path_to_data, 
+            f'slakh-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy.csv')
+        if os.path.exists(path_to_npz_metadata):
+            self.has_npy = True
+            self.metadata = pd.read_csv(path_to_npz_metadata).to_dict('records')
+        else:  
+            self.metadata = generate_slakh_npz(self.path_to_data,  instruments=classes,
+                                            chunk_len=self.chunk_len, hop_len=self.hop_len, sr=self.sr, 
+                                            transform_audio=transform_audio)
+            pd.DataFrame(self.metadata).to_csv(path_to_npz_metadata, index=False)
 
         self.classes = list(set([e['instrument'] for e in self.metadata]))
         self.classes.sort()

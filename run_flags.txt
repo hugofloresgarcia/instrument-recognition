@@ -2,7 +2,7 @@
 # BIG PAPA 
 # ---------
 # bigpapa-mdb
-python task.py --num_dataloader_workers 18 --batch_size 64 --accumulate_grad_batches 4 --learning_rate 0.0003 --log_gpu_memory True --log_epoch_metrics true --dataset medleydb --model tunedopenl3 --name bigpapa-mdb-newsplit  --version 0 --gpuid 0
+python task.py --num_dataloader_workers 18 --batch_size 64 --accumulate_grad_batches 2 --learning_rate 0.0003 --log_gpu_memory True --log_epoch_metrics true --dataset medleydb --model tunedopenl3 --name bigpapa-mdb-newsplit  --version 0 --gpuid 0
 
 # bigpapa-phil
 python task.py --num_dataloader_workers 18 --batch_size 16 --accumulate_grad_batches 8 --learning_rate 0.0003 --log_gpu_memory True --log_epoch_metrics true --dataset philharmonia --model tunedopenl3 --name bigpapa-phil --version 0 --gpuid 0

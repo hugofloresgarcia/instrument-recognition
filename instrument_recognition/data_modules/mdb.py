@@ -58,7 +58,7 @@ class_dict = {
     # 'gu'
     # 'guzheng'
     # 'harmonica'
-    # 'harp'
+    # 'harp': 'other',
     'horn section': 'brass',
     'kick drum': 'drum set',
     'lap steel guitar': 'acoustic guitar',
@@ -123,34 +123,56 @@ def process_mtrack(args):
         audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
         audio_len = len(audio)
         
-        # determine how many 1 second chunks we can get out of this
+        # determine how many chunk_len second chunks we can get out of this
         n_chunks = int(np.ceil(audio_len/(chunk_len*sr)))
+        audio = audio_utils.zero_pad(audio, n_chunks * sr)
+
+        # format save path
+        # send them bois to CHONK
+        audio_npy_path = stem.audio_path.replace('data/medleydb/Audio', 
+                    f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
+        audio_npy_path = audio_npy_path.replace('.wav', f'.npy')
+
+        # make subdirs if needed
+        os.makedirs(os.path.dirname(audio_npy_path), exist_ok=True)
+        print(f'saving {audio_npy_path}')
+
+        if not os.path.exists(audio_npy_path):
+            if transform_audio:
+                audio = torch.from_numpy(audio)
+                audio = random_transform(audio.unsqueeze(0).unsqueeze(0), 
+                    sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
+                audio = audio.numpy()
+
+            np.save(audio_npy_path, audio)
+        else:
+            print(f'already found: {audio_npy_path}')
 
         # iterate through chunks
         for start_time in np.arange(0, n_chunks, hop_len):
 
             # zero pad 
-            audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
+            # audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
 
-            # format save path
-            # SEND them bois to CHONK
-            audio_chunk_path = stem.audio_path.replace('data/medleydb/Audio', 
-                        f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
-            audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
+            # # format save path
+            # # SEND them bois to CHONK
+            # audio_chunk_path = stem.audio_path.replace('data/medleydb/Audio', 
+            #             f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
+            # audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
             
-            os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-            print(f'saving {audio_chunk_path}')
+            # os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
+            # print(f'saving {audio_chunk_path}')
 
-            if not os.path.exists(audio_chunk_path):
-                if transform_audio:
-                    audio_chunk = torch.from_numpy(audio_chunk)
-                    audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
-                        sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
-                    audio_chunk = audio_chunk.numpy()
+            # if not os.path.exists(audio_chunk_path):
+            #     if transform_audio:
+            #         audio_chunk = torch.from_numpy(audio_chunk)
+            #         audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
+            #             sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
+            #         audio_chunk = audio_chunk.numpy()
 
-                np.save(audio_chunk_path, audio_chunk)
-            else:
-                print(f'already found: {audio_chunk_path}')
+            #     np.save(audio_chunk_path, audio_chunk)
+            # else:
+            #     print(f'already found: {audio_chunk_path}')
 
             entry = dict(
                 # the definite stuff
@@ -235,7 +257,7 @@ class MDBDataset(torch.utils.data.Dataset):
     def __init__(self, 
                 path_to_dataset='/home/hugo/CHONK/data/medleydb',
                 sr=48000, transform=None, train=True, 
-                chunk_len=1, random_seed=4, hop_len=0.2): 
+                chunk_len=1, random_seed=4, hop_len=1): 
         self.sr = sr
         self.transform = transform
         self.chunk_len = chunk_len # in seconds
@@ -247,7 +269,7 @@ class MDBDataset(torch.utils.data.Dataset):
 
         # define metadata path
         path_to_metadata = os.path.join(
-            path_to_dataset, f'medleydb-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy.csv')
+            path_to_dataset, f'medleydb-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy-memmap.csv')
 
         # if we don't have the metadata, we need to generate it. 
         if not os.path.exists(path_to_metadata):
