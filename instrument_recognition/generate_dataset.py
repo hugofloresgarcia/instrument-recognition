@@ -9,10 +9,7 @@ import soundfile as sf
 import pandas as pd
 import medleydb as mdb
 
-import instrument_recognition.utils.train_utils as train_utils
-import instrument_recognition.utils.audio_utils as audio_utils
-import instrument_recognition.datasets.utils as data_utils
-
+import instrument_recognition as utils 
 
 def get_abspath(path):
     return os.path.abspath(os.path.expanduser(path))
@@ -59,7 +56,7 @@ def get_audio_chunk(audio, sr, start_time, chunk_size):
     chunked_audio = audio[start_idx:end_idx]
 
     if not len(audio) / sr == chunk_size * sr:
-        chunked_audio = audio_utils.zero_pad(chunked_audio, sr * chunk_size)
+        chunked_audio = utils.audio.zero_pad(chunked_audio, sr * chunk_size)
     return chunked_audio
 
 def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name, 
@@ -120,7 +117,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
         # if both paths, already exists, bail
         if not os.path.exists(audio_chunk_path):
             sf.write(audio_chunk_path, audio_chunk, sr, 'PCM_24')
-            data_utils.save_dict_json(entry, chunk_metadata_path)
+            utils.data.save_dict_json(entry, chunk_metadata_path)
         else:
             print(f'already found: {audio_chunk_path} and {chunk_metadata_path}')
 
@@ -203,7 +200,7 @@ def fix_metadata_and_save_separate_dicts(metadata):
             print(entry)
             continue
         path_to_json = entry['path_to_audio'].replace('.wav', '.json')
-        data_utils.save_dict_json(entry, path_to_json)
+        utils.data.save_dict_json(entry, path_to_json)
     
 
 if __name__ == "__main__":
@@ -216,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', type=str, required=True)
 
     parser.add_argument('--sr', type=int, default=48000)
-    parser.add_argument('--chunked', type=train_utils.str2bool, default=True)
+    parser.add_argument('--chunked', type=utils.train.str2bool, default=True)
     parser.add_argument('--chunk_size', type=float, default=1.0)
     parser.add_argument('--hop_size', type=float, default=1.0)
 

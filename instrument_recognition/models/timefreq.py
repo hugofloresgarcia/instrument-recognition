@@ -6,8 +6,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 import matplotlib.pyplot as plt
 
-from instrument_recognition.utils.audio_utils import amplitude_to_db, get_stft_filterbank
-from instrument_recognition.utils.plot_utils import plot_filterbank
+import instrument_recognition.utils as utils
 
 def plot_filterbank(fb, n_rows, n_cols, title='filterbank', figsize=(6.4, 4.8)):
     """
@@ -65,7 +64,7 @@ class Melspectrogram(pl.LightningModule):
         self.power_melgram = power_melgram
         
 
-        f_real, f_imag = get_stft_filterbank(self.n_fft, window='hann')
+        f_real, f_imag = utils.audio.get_stft_filterbank(self.n_fft, window='hann')
         self.n_bins = self.n_fft // 2 + 1
         
         mel_filters = librosa.filters.mel(sr=self.sr, n_fft=self.n_fft, n_mels=n_mels,
@@ -126,7 +125,7 @@ class Melspectrogram(pl.LightningModule):
         x = x.view(-1, 1, 128, 199)
         
         if self.return_decibel_melgram:
-            x = amplitude_to_db(x)
+            x = utils.audio.amplitude_to_db(x)
         return x
 
     def freeze_up_to(self, layer_name):

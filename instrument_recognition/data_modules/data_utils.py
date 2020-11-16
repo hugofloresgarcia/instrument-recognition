@@ -1,10 +1,11 @@
 import numpy as np
-from instrument_recognition.utils import audio_utils
 import torchaudio
 import torch
 import pandas as pd
 from tqdm import tqdm
 import pypianoroll
+
+from instrument_recognition.utils import audio_utils
 
 
 def is_silent(piano_roll):
