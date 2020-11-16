@@ -2,6 +2,7 @@ import os
 import warnings
 import json
 import yaml
+import random
 
 import numpy as np
 import torch
@@ -16,7 +17,6 @@ from tqdm import tqdm
 
 from instrument_recognition.data_modules import data_utils
 from instrument_recognition.utils import audio_utils
-from instrument_recognition.utils.transforms  import random_transform
 
 # rack up the workers
 from multiprocessing import Pool, Queue
@@ -184,14 +184,14 @@ class SlakhDataset(Dataset):
                                             transform_audio=False)
             pd.DataFrame(self.metadata).to_csv(path_to_npz_metadata, index=False)
 
-        self.classes = list(set([e['instrument'] for e in self.metadata]))
-        self.classes.sort()
+        # get sorted list of classes
+        self.remap_classes_to_mdb()
+        self.classes = self.get_classlist(self.metadata)
+        
         self.class_weights = np.array([1/pair[1] for pair in self.get_class_frequencies()])
         self.class_weights = self.class_weights / max(self.class_weights)
         print(self.get_class_frequencies())
         [print(f'{c}-{w}') for c, w in zip(self.classes, self.class_weights)]
-
-        self.remap_classes_to_mdb()
 
     def get_str_class_repr(self):
         str_class_repr = ''
@@ -239,9 +239,8 @@ class SlakhDataset(Dataset):
         # print(audio.shape)
         # print(id(audio))
         # exit()
+        audio = audio.unsqueeze(0)
 
-        # apply transform
-        audio = self.transform(audio) if self.transform is not None else audio
         
         # get labels
         instrument = entry['instrument']
@@ -299,16 +298,6 @@ class SlakhDataset(Dataset):
 
     def remap_classes_to_mdb(self):
         mapping = {
-            'Bass',
-            'Brass',
-            'Chromatic Percussion',
-            'Drums',
-            'Guitar',
-            'Organ',
-            'Piano',
-            'Pipe',
-            'Reed',
-            'Strings',
             'Strings (continued)': 'Strings', 
             'Synth Lead': 'Synth', 
             'Synth Pad': 'Synth', 

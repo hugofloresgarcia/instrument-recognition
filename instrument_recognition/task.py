@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchaudio
 import torchvision
 import pytorch_lightning as pl
 from pytorch_lightning.metrics import Accuracy, Precision, Recall, Fbeta
@@ -155,8 +156,10 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # batch transforms are now offline
         if train and self.hparams.online_transforms:
-            batch['X'] = transforms.random_transform(batch['X'], self.hparams.sample_rate, ['overdrive', 
-                                        'reverb', 'pitch', 'stretch'])
+            # batch['X'] = transforms.random_transform(batch['X'], self.hparams.sample_rate, ['overdrive', 
+            #                             'reverb', 'pitch', 'stretch'])
+            batch['X'] = transforms.random_torchaudio_transform(batch['X'], self.hparams.sample_rate,
+                            ['flanger', 'phaser', 'overdrive', 'eq', 'compand', 'pitch', 'speed'])
         return batch
 
     def _main_step(self, batch, batch_idx, train=False):

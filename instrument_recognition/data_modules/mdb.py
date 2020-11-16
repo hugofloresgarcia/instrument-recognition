@@ -13,52 +13,52 @@ import soundfile as sf
 import os
 import json
 from instrument_recognition.utils import audio_utils
-from instrument_recognition.utils.transforms  import random_transform
+from instrument_recognition.utils.transforms import random_torchaudio_transform
 
 class_dict = {
     'Main System': 'other',
     # 'accordion'
     # 'acoustic guitar'
-    # 'alto saxophone'
+    'alto saxophone': 'reeds',
     'auxiliary percussion': 'percussion',
-    # 'bamboo flute'
+    'bamboo flute': 'pipe',
     # 'banjo'
-    # 'baritone saxophone'
-    # 'bass clarinet'
+    'baritone saxophone': 'reeds',
+    'bass clarinet': 'reeds',
     # 'bass drum'
-    # 'bassoon'
+    'bassoon': 'reeds',
     'bongo': 'percussion',
     'brass section': 'brass',
-    # 'cello'
-    'cello section': 'cello',
+    'cello': 'strings', 
+    'cello section': 'strings', 
     'chimes': 'other',
     'claps': 'percussion',
-    # 'clarinet'
+    'clarinet': 'reeds',
     'clarinet section': 'clarinet',
     # 'clean electric guitar'
     'cymbal': 'drum set',
     'darbuka': 'other',
     # 'distorted electric guitar'
-    # 'dizi'
-    # 'double bass'
+    'dizi': 'pipe',
+    'double bass': 'bass',
     'doumbek': 'other',
     # 'drum machine'
     # 'drum set'
-    # 'electric bass'
+    'electric bass': 'bass',
     # 'electric piano'
-    # 'erhu'
+    'erhu': 'strings',
     'female singer': 'female vocalist',
-    # 'flute'
-    'flute section': 'flute',
+    'flute': 'pipe',
+    'flute section': 'pipe',
     'french horn': 'brass',
     'french horn section': 'brass',
     'fx/processed sound': 'other',
-    'glockenspiel' : 'mallet percussion',
+    'glockenspiel' : 'chromatic percussion',
     'gong': 'percussion',
     # 'gu'
     # 'guzheng'
     # 'harmonica'
-    # 'harp': 'other',
+    'harp': 'other', 
     'horn section': 'brass',
     'kick drum': 'drum set',
     'lap steel guitar': 'acoustic guitar',
@@ -68,21 +68,21 @@ class_dict = {
     'male speaker': 'male vocalist',
     # 'mandolin'
     # 'melodica'
-    # 'oboe'
+    'oboe': 'reeds',
     # 'oud'
     # 'piano'
-    # 'piccolo'
+    'piccolo' : 'pipe',
     'sampler': 'other', 
     'scratches': 'other', 
     'shaker': 'percussion', 
     'snare drum': 'drum set',
-    # 'soprano saxophone'
-    # 'string section'
+    'soprano saxophone': 'reeds',
+    'string section': 'strings', 
     # 'synthesizer'
     'tabla': 'percussion',
     'tack piano': 'piano',
     'tambourine': 'percussion',
-    # 'tenor saxophone'
+    'tenor saxophone': 'reeds',
     'timpani': 'percussion',
     'toms': 'percussion',
     'trombone': 'brass',
@@ -90,11 +90,11 @@ class_dict = {
     'trumpet': 'brass',
     'trumpet section': 'brass',
     'tuba': 'other',
-    'vibraphone': 'mallet percussion',
-    # 'viola'
-    'viola section': 'viola',
-    # 'violin'
-    'violin section': 'violin',
+    'vibraphone': 'chromatic percussion',
+    'viola': 'strings', 
+    'viola section': 'strings', 
+    'violin': 'strings', 
+    'violin section': 'strings', 
     # 'vocalists'
     # 'yangqin'
     # 'zhongruan'
@@ -104,6 +104,7 @@ class_dict = {
 from multiprocessing import Pool
 
 def process_mtrack(args):
+    # TODO: honestly, this needs to be its own script
     metadata = []
     mtrack, chunk_len, sr, hop_len, splits, transform_train = args
     # figure out whether we are going to add FX to this track or not
@@ -125,58 +126,60 @@ def process_mtrack(args):
         
         # determine how many chunk_len second chunks we can get out of this
         n_chunks = int(np.ceil(audio_len/(chunk_len*sr)))
-        audio = audio_utils.zero_pad(audio, n_chunks * sr)
+        # audio = audio_utils.zero_pad(audio, n_chunks * sr)
 
-        # format save path
-        # send them bois to CHONK
-        audio_npy_path = stem.audio_path.replace('data/medleydb/Audio', 
-                    f'CHONK/data/medleydb/Audio_sr-{sr}')
-        audio_npy_path = audio_npy_path.replace('.wav', f'.npy')
+        # # format save path
+        # # send them bois to CHONK
+        # audio_npy_path = stem.audio_path.replace('data/medleydb/Audio', 
+        #             f'CHONK/data/medleydb/Audio_sr-{sr}_transformed-{transform_audio}')
+        # audio_npy_path = audio_npy_path.replace('.wav', f'.npy')
 
-        # make subdirs if needed
-        os.makedirs(os.path.dirname(audio_npy_path), exist_ok=True)
-        print(f'saving {audio_npy_path}')
+        # # make subdirs if needed
+        # os.makedirs(os.path.dirname(audio_npy_path), exist_ok=True)
+        # print(f'saving {audio_npy_path}')
 
-        if not os.path.exists(audio_npy_path):
-            if transform_audio:
-                audio = torch.from_numpy(audio)
-                audio = random_transform(audio.unsqueeze(0).unsqueeze(0), 
-                    sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
-                audio = audio.numpy()
+        # if not os.path.exists(audio_npy_path):
+        #     if transform_audio:
+        #         audio = torch.from_numpy(audio).unsqueeze(0)
+        #         audio = transforms.random_torchaudio_transform(audio, sr,
+        #                     ['flanger', 'phaser', 'overdrive', 'eq', 'compand', 'pitch', 'speed'])
+        #         # squeeze channel dim
+        #         audio = audio.squeeze(0)
+        #         audio = audio.numpy()
 
-            np.save(audio_npy_path, audio)
-        else:
-            print(f'already found: {audio_npy_path}')
+        #     np.save(audio_npy_path, audio)
+        # else:
+        #     print(f'already found: {audio_npy_path}')
 
         # iterate through chunks
         for start_time in np.arange(0, n_chunks, hop_len):
-
+            start_time = np.around(start_time, 4)
             # zero pad 
-            # audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
+            audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_len)
 
-            # # format save path
-            # # SEND them bois to CHONK
-            # audio_chunk_path = stem.audio_path.replace('data/medleydb/Audio', 
-            #             f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
-            # audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
+            # format save path
+            # SEND them bois to CHONK
+            audio_chunk_path = stem.audio_path.replace('data/medleydb/Audio', 
+                        f'CHONK/data/medleydb/Audio_chunklen-{chunk_len}_sr-{sr}_hop-{hop_len}')
+            audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
             
-            # os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-            # print(f'saving {audio_chunk_path}')
+            os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
+            print(f'saving {audio_chunk_path}')
 
-            # if not os.path.exists(audio_chunk_path):
-            #     if transform_audio:
-            #         audio_chunk = torch.from_numpy(audio_chunk)
-            #         audio_chunk = random_transform(audio_chunk.unsqueeze(0).unsqueeze(0), 
-            #             sr, ['overdrive', 'reverb', 'pitch', 'stretch']).squeeze(0).squeeze(0)
-            #         audio_chunk = audio_chunk.numpy()
+            if not os.path.exists(audio_chunk_path):
+                if transform_audio:
+                    audio_chunk = torch.from_numpy(audio_chunk)
+                    audio_chunk = random_torchaudio_transform(audio_chunk.unsqueeze(0), sr,
+                                ['flanger', 'phaser', 'overdrive', 'eq', 'compand', 'pitch', 'speed']).squeeze(0)
+                    audio_chunk = audio_chunk.numpy()
 
-            #     np.save(audio_chunk_path, audio_chunk)
-            # else:
-            #     print(f'already found: {audio_chunk_path}')
+                np.save(audio_chunk_path, audio_chunk)
+            else:
+                print(f'already found: {audio_chunk_path}')
 
             entry = dict(
                 # the definite stuff
-                path_to_audio=audio_npy_path, 
+                path_to_audio=audio_chunk_path, 
                 instrument_list=stem.instrument, 
                 instrument=stem.instrument[0],
                 duration=chunk_len, 
@@ -187,7 +190,7 @@ def process_mtrack(args):
                 track_id=mtrack.track_id, 
                 stem_idx=stem.stem_idx, 
                 audio_transformed=transform_audio)
-            print(entry)
+            # print(entry)
             metadata.append(entry)
 
     return metadata
@@ -258,11 +261,12 @@ class MDBDataset(torch.utils.data.Dataset):
     def __init__(self, 
                 path_to_dataset='/home/hugo/CHONK/data/medleydb',
                 sr=48000, transform=None, train=True, 
-                chunk_len=1, random_seed=4, hop_len=1): 
+                chunk_len=1, random_seed=4, hop_len=0.25, load_augmented=True): 
         self.sr = sr
         self.transform = transform
         self.chunk_len = chunk_len # in seconds
         self.hop_len = hop_len
+        self.train = train
 
         # get the split (for generating metadata)
         self.splits = mdb.utils.artist_conditional_split(test_size=0.15, num_splits=1, 
@@ -270,13 +274,13 @@ class MDBDataset(torch.utils.data.Dataset):
 
         # define metadata path
         path_to_metadata = os.path.join(
-            path_to_dataset, f'medleydb-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy-memmap.csv')
+            path_to_dataset, f'medleydb-metadata-chunk_len-{self.chunk_len}-sr-{self.sr}-hop-{self.hop_len}-npy-memmap_augmented-{load_augmented}.csv')
 
         # if we don't have the metadata, we need to generate it. 
         if not os.path.exists(path_to_metadata):
             print('generating dataset and metadata')
             self.metadata = generate_medleydb_metadata(chunk_len=self.chunk_len, sr=self.sr, hop_len=self.hop_len, 
-                                                        splits=self.splits, transform_train=False)
+                                                        splits=self.splits, transform_train=True)
             
             print('done generating dataset and metadata')
             pd.DataFrame(self.metadata).to_csv(path_to_metadata, index=False)
@@ -307,29 +311,25 @@ class MDBDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.metadata)
     
-    def __getitem__(self, idx):
-        entry = self.metadata[idx]
+    def __getitem__(self, index):
+        entry = self.metadata[index]
         # load audio using numpy
-        # audio = np.load(entry['path_to_audio'], mmap_mode='r', allow_pickle=False)
-        start_sample = entry['start_time'] * entry['sr']
-        audio_len = entry['duration'] * entry['sr']
-        audiomm = np.memmap(entry['path_to_audio'],np.float32,  'r', offset=start_sample, shape=(audio_len))
+        audio = np.load(entry['path_to_audio'],mmap_mode='r', allow_pickle=False)
+        # start_sample = entry['start_time'] * entry['sr']
+        # audio_len = entry['duration'] * entry['sr']
+        # audiomm = np.memmap(entry['path_to_audio'], np.float32, 'c', offset=start_sample, shape=(audio_len))
         # print(audiomm.shape)
         # print(id(audiomm))
-        # start_sample = entry['start_time'] * entry['sr']
-        # end_sample = start_sample + entry['duration'] * entry['sr']
-        # audio = audio[start_sample:end_sample]
-        audio = torch.from_numpy(audiomm).clone()
-        del audiomm
+        start_sample = entry['start_time'] * entry['sr']
+        end_sample = start_sample + entry['duration'] * entry['sr']
+        audio = audio[start_sample:end_sample]
+        audio = torch.from_numpy(audio).clone().float()
+        # audio = torch.zeros(48000)
+        # del audiomm
         # print(audio.shape)
         # print(id(audio))
         # exit()
-
-        # add channel dimensions
         audio = audio.unsqueeze(0)
-
-        # apply transform
-        audio = self.transform(audio) if self.transform is not None else audio
         
         # get labels
         instrument = entry['instrument']

@@ -32,22 +32,11 @@ class TunedOpenL3(pl.LightningModule):
         # self.flatten = nn.Flatten()
         self.fc_seq = nn.Sequential(
                 nn.Flatten(),
-                # # nn.BatchNorm1d(6144, momentum=0.5), #track_running_stats=False ), 
-                # nn.Linear(6144, 2048), 
-                # nn.ReLU(),
-                # nn.Dropout(p=self.hparams.dropout),
 
-                # # nn.BatchNorm1d(2048, momentum=0.5), #track_running_stats=False), 
-                # nn.Linear(2048, 512), 
-                # nn.ReLU(),
-                # nn.Dropout(p=self.hparams.dropout),
-
-                # nn.BatchNorm1d(512, momentum=0.5), #track_running_stats=False),
                 nn.Linear(512, 128),
                 nn.ReLU(), 
                 nn.Dropout(p=self.hparams.dropout),
 
-                # nn.BatchNorm1d(128,momentum=0.5), #track_running_stats=False),
                 nn.Linear(128, num_output_units))
 
         # set up unfreeze callbacks
@@ -59,12 +48,6 @@ class TunedOpenL3(pl.LightningModule):
             self.callback_list =  []
 
     def forward(self, x):
-        # if self.is_frozen:
-        #     self.freeze()
-        #     self.eval()
-        # else:
-        #     self.unfreeze()
-        #     self.train()
         if self.openl3.use_kapre:
             # NOTE: still need to do pass thru filters
             # to appease the hooks. so it will be twice a slow
@@ -85,4 +68,5 @@ class TunedOpenL3(pl.LightningModule):
         parser.add_argument('--openl3_freeze', default=False, type=str2bool)
         parser.add_argument('--openl3_unfreeze_epoch', default=0, type=int)
         parser.add_argument('--use_kapre', default=False, type=str2bool)
+
         return parser

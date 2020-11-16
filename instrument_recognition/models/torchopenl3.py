@@ -9,6 +9,42 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from instrument_recognition.utils.train_utils import timing, load_weights
+from instrument_recognition.models.timefreq import Melspectrogram
+
+def get_model(n_mels=128, embedding_size=512):
+    if embedding_size == 512:
+        maxpool_kernel=(16, 24)
+    elif embedding_size == 6144:
+        maxpool_kernel=(4, 8)
+    else: 
+        raise ValueError(f'embedding size should be 512 or 6144 but got {embedding_size}')
+
+    return OpenL3Mel128(maxpool_kernel=maxpool_kernel)
+    
+class OpenL3Embedding(pl.LightningModule):
+
+    def __init__(self, n_mels, embedding_size):
+        
+        if embedding_size == 512:
+            maxpool_kernel=(16, 24)
+        elif embedding_size == 6144:
+            maxpool_kernel=(4, 8)
+        else: 
+            raise ValueError(f'embedding size should be 512 or 6144 but got {embedding_size}')
+
+        assert n_mels in (128), "n_mels must be 128. 256 model is not supported yet"    
+        
+        self.filters = Melspectrogram(sr=48000, n_mels=n_mels,
+                                      fmin=0.0, fmax=None, power_melgram=1.0, 
+                                      return_decibel_melgram=True, trainable_fb=False, 
+                                      htk=True)
+        self.openl3 = OpenL3Mel128(maxpool_kernel=maxpool_kernel, use_kapre=False)
+        self.flatten = nn.Flatten()
+    
+    def forward(self, x):
+        x = self.filters(x)
+        x = self.openl3(x)
+        return self.flatten(x)
 
 def _get_kapre_melspectrogram_model(input_shape):
     # lazy load!
@@ -35,19 +71,6 @@ def _get_kapre_melspectrogram_model(input_shape):
     for l in layers:
         x = l(x)
     return Model(inputs=[inp], outputs=[x])
-    
-class LayerUnfreezeCallback(pl.callbacks.base.Callback):
-    def __init__(self, model, unfreeze_epoch=10):
-        self.unfreeze_epoch = unfreeze_epoch
-        self.model = model
-
-    def on_epoch_end(self, trainer, module):
-
-        epoch = trainer.current_epoch
-
-        if epoch == self.unfreeze_epoch:
-            self.model.unfreeze()
-            self.is_frozen = False
 
 class OpenL3Mel128(pl.LightningModule):
 
