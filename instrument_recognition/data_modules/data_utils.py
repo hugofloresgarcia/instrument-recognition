@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 import pypianoroll
 
-from instrument_recognition.utils import audio_utils
+from instrument_recognition.utils import utils.audio
 
 
 def is_silent(piano_roll):
@@ -78,11 +78,11 @@ def collate_audio(batch):
         l = e['labels']
 
         # resample audio to 48k (bc openl3)
-        a = audio_utils.resample(a, int(e['sr']), 48000)
+        a = utils.audio.resample(a, int(e['sr']), 48000)
         n_chunks = np.ceil(a.shape[-1] / 48000)
         n_chunks = int(n_chunks) if n_chunks < 10 else 9
         a = a.view(-1)
-        a = audio_utils.zero_pad(a, n_chunks * 48000)
+        a = utils.audio.zero_pad(a, n_chunks * 48000)
         a = a[0:n_chunks * 48000]
         if isinstance(a, np.ndarray):
             a = torch.from_numpy(a)

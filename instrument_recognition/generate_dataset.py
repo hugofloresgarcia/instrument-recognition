@@ -213,7 +213,6 @@ if __name__ == "__main__":
     parser.add_argument('--dataset', type=str, required=True)
 
     parser.add_argument('--sr', type=int, default=48000)
-    parser.add_argument('--chunked', type=utils.train.str2bool, default=True)
     parser.add_argument('--chunk_size', type=float, default=1.0)
     parser.add_argument('--hop_size', type=float, default=1.0)
 

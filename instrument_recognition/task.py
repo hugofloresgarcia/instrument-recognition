@@ -518,8 +518,6 @@ if __name__ == "__main__":
 
     # load model
     model = load_model(hparams, output_units=len(datamodule.dataset.classes))
-    # model = TunedOpenL3(hparams)
-    # model = TunedOpenL3.load_from_checkpoint('/home/hugo/lab/mono_music_sed/instrument_recognition/test-tubes/bigpapa-mdb/version_6/checkpoints/epoch=31-loss_val=0.19.ckpt', strict=False, hparams=hparams)
 
     # load task
     task =  InstrumentDetectionTask(hparams, model, datamodule)

@@ -3,8 +3,9 @@ import os
 import numpy as np
 import torch
 
+import instrument_recognition.utils as utils
+
 from instrument_recognition.datasets.audio_dataset import AudioDataset
-from instrument_recognition.datasets import utils as data_utils
 from instrument_recognition.models import torchopenl3
 
 def embed_dataset(path_to_data, path_to_output, 
@@ -43,7 +44,7 @@ def embed_dataset(path_to_data, path_to_output,
             np.save(path_to_embedding, emb_out)
 
             path_to_entry = path_to_embedding.replace('.npy', '.json')
-            data_utils.save_dict_json(entry, path_to_entry)
+            utils.data.save_dict_json(entry, path_to_entry)
 
 def load_embedding_model(model_name):
     if 'openl3' in model_name:
