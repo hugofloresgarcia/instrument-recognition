@@ -4,16 +4,16 @@ import torch
 import pandas as pd
 from tqdm.contrib.concurrent import process_map
 
+import instrument_recognition.utils as utils
 from instrument_recognition.datasets.audio_dataset import AudioDataset
-import instrument_recognition.datasets.utils as data_utils
-from instrument_recognition.utils import effects, train_utils
+
 
 
 def augment_from_file_to_file(input_path, output_path, effect_chain=None):
     effect_chain = ['compand','overdrive', 'eq', 'pitch', 'speed', 
                     'phaser', 'flanger', 'reverb', 'chorus', 'speed', 
                     'lowpass']
-    tfm, effect_params = effects.get_random_transformer(effect_chain)
+    tfm, effect_params = utils.effects.get_random_transformer(effect_chain)
     tfm.build_file(input_path, output_path)
     return effect_params
 
@@ -30,7 +30,7 @@ def augment_metadata_entry(entry, path_to_data, path_to_output):
 
     # save entry using json
     path_to_json = path_to_augmented_audio.replace('.wav', '.json')
-    data_utils.save_dict_json(entry, path_to_json)
+    utils.data.save_dict_json(entry, path_to_json)
 
     return entry
 
@@ -39,8 +39,8 @@ def augment_metadata_entry_unpack(kwargs):
 
 def augment_dataset(path_to_data, path_to_output, num_workers=0):
     # load metadata (should be a list of dicts)
-    path_to_metadata = data_utils.get_path_to_metadata(path_to_data)
-    metadata = data_utils.load_metadata(path_to_metadata)
+    path_to_metadata = utils.data.get_path_to_metadata(path_to_data)
+    metadata = utils.data.load_metadata(path_to_metadata)
 
     if num_workers == 0:
         # just iterate through every sample and send to soxbindings?
@@ -57,8 +57,8 @@ def augment_dataset(path_to_data, path_to_output, num_workers=0):
         # new_metadata = pool.map(augment_metadata_entry_unpack, args)
         new_metadata = process_map(augment_metadata_entry_unpack, args, max_workers=num_workers, chunksize=4)
     
-    path_to_output_metadata = data_utils.get_path_to_metadata(path_to_output)
-    data_utils.save_metadata(new_metadata, path_to_output_metadata)
+    path_to_output_metadata = utils.data.get_path_to_metadata(path_to_output)
+    utils.data.save_metadata(new_metadata, path_to_output_metadata)
 
 def get_effect_chain_statistics(metadata):
     stats = {}
@@ -69,8 +69,8 @@ def get_effect_chain_statistics(metadata):
     print(stats)            
 
 def get_effect_chain_statistics_from_metadata_file(path_to_data):
-    path_to_metadata = data_utils.get_path_to_metadata(path_to_data)
-    metadata = data_utils.load_metadata(path_to_metadata)
+    path_to_metadata = utils.data.get_path_to_metadata(path_to_data)
+    metadata = utils.data.load_metadata(path_to_metadata)
 
     get_effect_chain_statistics(metadata)
 
@@ -82,7 +82,7 @@ if __name__=="__main__":
     parser.add_argument('--path_to_data', type=str, required=True)
     parser.add_argument('--path_to_output', type=str, required=True)
     parser.add_argument('--num_workers', type=int, default=20)
-    parser.add_argument('--get_effect_stats', type=train_utils.str2bool, default=False)
+    parser.add_argument('--get_effect_stats', type=utils.train.str2bool, default=False)
 
     args = parser.parse_args()
 

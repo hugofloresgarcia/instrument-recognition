@@ -8,7 +8,8 @@ import pytorch_lightning as pl
 
 from instrument_recognition.models.timefreq import Melspectrogram
 from instrument_recognition.models.torchopenl3 import OpenL3Mel128, LayerUnfreezeCallback
-from instrument_recognition.utils.train_utils import str2bool, timing, get_best_ckpt_path, Hook
+
+import instrument_recognition.utils as utils
 
 class TunedOpenL3(pl.LightningModule):
 
@@ -65,8 +66,8 @@ class TunedOpenL3(pl.LightningModule):
     def add_model_specific_args(cls, parent_parser):
         parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--sr', default=48000, type=int)
-        parser.add_argument('--openl3_freeze', default=False, type=str2bool)
+        parser.add_argument('--openl3_freeze', default=False, type=utils.train.str2bool)
         parser.add_argument('--openl3_unfreeze_epoch', default=0, type=int)
-        parser.add_argument('--use_kapre', default=False, type=str2bool)
+        parser.add_argument('--use_kapre', default=False, type=utils.train.str2bool)
 
         return parser

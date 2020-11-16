@@ -19,16 +19,8 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta
 import sklearn
 import matplotlib.pyplot as plt
 
-#TODO: as I get more data modules, 
-# the import should just be data_modules.PhilharmoniaDataModule
-from instrument_recognition.models.tunedopenl3 import TunedOpenL3
-from instrument_recognition.models.openlclassifier import OpenLClassifier
-from instrument_recognition.data_modules.philharmonia import PhilharmoniaDataModule
-from instrument_recognition.data_modules.slakh import SlakhDataModule
-from instrument_recognition.data_modules.mdb import MDBDataModule
-from instrument_recognition.utils.plot_utils import plot_to_image, plot_confusion_matrix
-from instrument_recognition.utils.train_utils import str2bool, timing, get_best_ckpt_path, Hook, save_torchscript_model, mixup_data, mixup_criterion, noneint
-from instrument_recognition.utils import transforms
+import instrument_recognition.models as models
+import instrument_recognition.utils as utils
 
 def load_datamodule(hparams):
     if hparams.dataset.lower() == 'philharmonia':
@@ -51,10 +43,10 @@ def load_datamodule(hparams):
 
 def load_model(hparams, output_units=None):
     if hparams.model.lower() == 'tunedopenl3':
-        model = TunedOpenL3(hparams, output_units)
+        model = models.tunedopenl3TunedOpenL3(hparams, output_units)
 
     elif hparams.model.lower() == 'openlclassifier':
-        model = OpenLClassifier(hparams, output_units)  
+        model = models.openlclassifier.OpenLClassifier(hparams, output_units)  
 
     return model       
 
@@ -94,18 +86,18 @@ class InstrumentDetectionTask(pl.LightningModule):
         parser.add_argument('--learning_rate',  default=1e-4,   type=float)
 
         # LOGGING
-        parser.add_argument('--log_epoch_metrics', default=True, type=str2bool)
-        parser.add_argument('--log_train_epoch_metrics', default=False, type=str2bool)
+        parser.add_argument('--log_epoch_metrics', default=True, type=utils.train.str2bool)
+        parser.add_argument('--log_train_epoch_metrics', default=False, type=utils.train.str2bool)
 
         # MODELS
         parser.add_argument('--dropout',        default=0.5,    type=float) #0.5 dropout is gut
-        parser.add_argument('--mixup',          default=False,   type=str2bool)
+        parser.add_argument('--mixup',          default=False,   type=utils.train.str2bool)
         parser.add_argument('--mixup_alpha',        default=0.2,    type=float)
-        parser.add_argument('--weighted_cross_entropy',     default=True, type=str2bool)
+        parser.add_argument('--weighted_cross_entropy',     default=True, type=utils.train.str2bool)
 
         # AUDIO
         parser.add_argument('--sample_rate',     default=48000, type=int)
-        # parser.add_argument('--online_transforms', default=False, type=str2bool)
+        # parser.add_argument('--online_transforms', default=False, type=utils.train.str2bool)
 
         return parser
 
@@ -150,10 +142,10 @@ class InstrumentDetectionTask(pl.LightningModule):
             loss = self.criterion(yhat, y)
         else:
             batch = self.preprocess(batch, train=train)
-            X, y_a, y_b, lam = mixup_data(batch['X'], batch['y'], alpha=self.hparams.mixup_alpha)
+            X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.hparams.mixup_alpha)
             # forward pass through model
             yhat = self.model(X)
-            loss = mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
+            loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
             y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
 
         yhat = torch.argmax(F.softmax(yhat, dim=1), dim=1, keepdim=False)
@@ -357,7 +349,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         for name, layer in self.named_modules():
             if name in layer_names:
                 found_layer = True
-                self.fwd_hooks[name] = Hook(layer) 
+                self.fwd_hooks[name] = utils.train.Hook(layer) 
         if not found_layer:
             raise Exception(f'couldnt find at least one of the layers: {layer_names}')
  
@@ -380,7 +372,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         conf_matrix = np.around(conf_matrix, 3)
 
         # get plotly images as byte array
-        conf_matrix = plot_to_image(plot_confusion_matrix(conf_matrix, self.classes))
+        conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classes))
 
         # CONFUSION MATRIX (NORMALIZED)
         norm_conf_matrix = sklearn.metrics.confusion_matrix(
@@ -389,7 +381,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         norm_conf_matrix = np.around(norm_conf_matrix, 2)
 
         # get plotly images as byte array
-        norm_conf_matrix = plot_to_image(plot_confusion_matrix(norm_conf_matrix, self.classes))
+        norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classes))
 
         # log images
         self.log(f'accuracy/{prefix}/epoch', accuracy_score(y, yhat, normalize=True))
@@ -423,7 +415,7 @@ def train_instrument_detection_task(hparams, model):
     # set up logging and checkpoint dirs
     log_dir = os.path.join(os.getcwd(), 'test-tubes', hparams.name, f'version_{logger.version}')
     checkpoint_dir = os.path.join(log_dir, 'checkpoints')
-    best_ckpt = get_best_ckpt_path(checkpoint_dir)
+    best_ckpt = utils.train.get_best_ckpt_path(checkpoint_dir)
     
     # add log_dir to hparams for 
     model.log_dir = log_dir
@@ -474,7 +466,7 @@ def train_instrument_detection_task(hparams, model):
     if hparams.export:
         # model.model.freeze()
         trainer.test(model)
-        save_torchscript_model(model.model, 'model.pt')
+        utils.train.save_torchscript_model(model.model, 'model.pt')
                                 # os.path.join(model.log_dir, 
                                 #             f'model_torchscript.pt'))
 
@@ -497,12 +489,12 @@ def get_task_parser():
     parser.add_argument('--num_epochs',     default=150,    type=int)
     parser.add_argument('--name',           default='tunedl3-exp', type=str)
     parser.add_argument('--random_seed',    default=42,    type=int)
-    parser.add_argument('--verbose',        default=True,  type=str2bool)
-    parser.add_argument('--version',        default=None,  type=noneint)
-    parser.add_argument('--export',         default=False, type=str2bool)
+    parser.add_argument('--verbose',        default=True,  type=utils.train.str2bool)
+    parser.add_argument('--version',        default=None,  type=utils.train.noneint)
+    parser.add_argument('--export',         default=False, type=utils.train.str2bool)
 
     # TRAINER
-    parser.add_argument('--gpuid',          default=None, type=noneint)
+    parser.add_argument('--gpuid',          default=None, type=utils.train.noneint)
 
     # DATASETS
     parser.add_argument('--dataset',    default='philharmonia', type=str)
