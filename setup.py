@@ -32,8 +32,7 @@ install_requires = [
     'torchaudio',
     'torchvision',
     'librosa', 
-    'pypianoroll', 
-    'soxbindings']
+    'sox']
 
 if __name__ == '__main__':
     setup(**setup_args, install_requires=install_requires)

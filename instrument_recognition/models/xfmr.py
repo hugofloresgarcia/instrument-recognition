@@ -60,8 +60,3 @@ class MultiheadAttention(nn.Module):
         x = torch.cat([head(x) for head in self.heads], dim=-1) 
 
         return self.w(x)
-
-
-
-    
-

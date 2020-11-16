@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 #TODO: as I get more data modules, 
 # the import should just be data_modules.PhilharmoniaDataModule
 from instrument_recognition.models.tunedopenl3 import TunedOpenL3
+from instrument_recognition.models.openlclassifier import OpenLClassifier
 from instrument_recognition.data_modules.philharmonia import PhilharmoniaDataModule
 from instrument_recognition.data_modules.slakh import SlakhDataModule
 from instrument_recognition.data_modules.mdb import MDBDataModule
@@ -50,11 +51,10 @@ def load_datamodule(hparams):
 
 def load_model(hparams, output_units=None):
     if hparams.model.lower() == 'tunedopenl3':
-        #TODO: this output units thing is hacky
-        if output_units is not None:
-            model = TunedOpenL3(hparams, output_units)
-        else:
-            model = TunedOpenl3(hparams)
+        model = TunedOpenL3(hparams, output_units)
+
+    elif hparams.model.lower() == 'openlclassifier':
+        model = OpenLClassifier(hparams, output_units)  
 
     return model       
 
@@ -67,7 +67,10 @@ class InstrumentDetectionTask(pl.LightningModule):
         # datamodules
         self.datamodule = datamodule
         self.classes = self.datamodule.dataset.classes
-        if hasattr(self.datamodule.dataset, 'class_weights') and self.hparams.weighted_cross_entropy:
+
+        # do weighted cross entropy? 
+        if self.hparams.weighted_cross_entropy:
+            assert hasattr(self.datamodule.dataset, 'class_weights'), 'dataset is missing self.class_weights'
             self.class_weights = nn.Parameter(
                 torch.from_numpy(self.datamodule.dataset.class_weights).float())
             self.class_weights.requires_grad = False
@@ -80,24 +83,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         # register forward hooks for model's logging layers
         self.fwd_hooks = OrderedDict()
         self.register_all_hooks()
-
-        # set up metrics
-        # NOTE: pl metrics aren't playing nicely with the gpus :(
-        # self.train_accuracy = Accuracy(dist_sync_on_step=True)
-        # self.val_accuracy = Accuracy(dist_sync_on_step=True)
-        # self.test_accuracy = Accuracy(dist_sync_on_step=True)
-
-        # self.train_precision = Precision(len(self.classes), dist_sync_on_step=True)
-        # self.val_precision = Precision(len(self.classes), dist_sync_on_step=True)
-        # self.test_precision = Precision(len(self.classes),  dist_sync_on_step=True)
-
-        # self.train_recall = Recall(len(self.classes),  dist_sync_on_step=True)
-        # self.val_recall = Recall(len(self.classes),  dist_sync_on_step=True)
-        # self.test_recall = Recall(len(self.classes),  dist_sync_on_step=True)
-
-        # self.train_fscore = Fbeta(len(self.classes), dist_sync_on_step=True)
-        # self.val_fscore = Fbeta(len(self.classes), dist_sync_on_step=True)
-        # self.test_fscore = Fbeta(len(self.classes), dist_sync_on_step=True)
 
         #  logging
         self.log_dir = None
@@ -120,7 +105,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # AUDIO
         parser.add_argument('--sample_rate',     default=48000, type=int)
-        parser.add_argument('--online_transforms', default=False, type=str2bool)
+        # parser.add_argument('--online_transforms', default=False, type=str2bool)
 
         return parser
 
@@ -154,12 +139,6 @@ class InstrumentDetectionTask(pl.LightningModule):
             batch['X'] = torch.cat([batch['X'], batch['X']], dim=0)
             batch['y'] = torch.cat([batch['y'], batch['y']], dim=0)
 
-        # batch transforms are now offline
-        if train and self.hparams.online_transforms:
-            # batch['X'] = transforms.random_transform(batch['X'], self.hparams.sample_rate, ['overdrive', 
-            #                             'reverb', 'pitch', 'stretch'])
-            batch['X'] = transforms.random_torchaudio_transform(batch['X'], self.hparams.sample_rate,
-                            ['flanger', 'phaser', 'overdrive', 'eq', 'compand', 'pitch', 'speed'])
         return batch
 
     def _main_step(self, batch, batch_idx, train=False):
@@ -183,12 +162,6 @@ class InstrumentDetectionTask(pl.LightningModule):
                     yhat=yhat.detach().cpu(), X=X.detach().cpu())
 
     def training_step(self, batch, batch_idx):
-        # # this works like an mf charm and it do't need no callbacks
-        # if self.current_epoch < self.hparams.openl3_unfreeze_epoch \
-        #                         and self.hparams.openl3_freeze:
-        #     self.model.openl3.freeze()
-        # else:
-        #     self.model.openl3.unfreeze()
 
         # get result of forward pass
         result = self._main_step(batch, batch_idx, train=True)
@@ -295,6 +268,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         """
         log a random audio example with predictions and truths!
         """
+        raise NotImplementedError 
         audio = batch['X']
         yhat = batch['yhat']
         y = batch['y']

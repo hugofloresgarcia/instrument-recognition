@@ -554,7 +554,7 @@ class MDBDataModule(pl.LightningDataModule):
              shuffle=False, num_workers=self.num_workers)
 
 class CollateAudio:
-    """ callable class to collate and resample audio batches
+    """ callable class to collate batches
     """
 
     def __init__(self, sample_rate):
