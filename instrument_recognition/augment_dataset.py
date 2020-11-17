@@ -26,8 +26,8 @@ def augment_metadata_entry(entry, path_to_data, path_to_output):
     path_to_json = path_to_augmented_audio.replace('.wav', '.json')
     
     # bail if the paths already exist
-    if os.path.exists(path_to_augmented_audio) and os.path.exists(path_to_json):
-        print(f'already found audio and json for {path_to_augmented_audio}')
+    if os.path.exists(path_to_json):
+        print(f'already found annotation file for {path_to_augmented_audio}')
         return 
 
     # do the magic
@@ -44,22 +44,20 @@ def augment_metadata_entry_unpack(kwargs):
     return augment_metadata_entry(**kwargs)
 
 def augment_dataset(path_to_data, path_to_output, num_workers=0):
-    # load metadata (should be a list of dicts)
-    metadata = utils.data.glob_metadata_entries(path_to_data)
+    # load metadata (should be generator that feeds entries)
+    metadata = utils.data.load_dataset_metadata(path_to_data)
 
     if num_workers == 0:
         # just iterate through every sample and send to soxbindings?
-        new_metadata = []
         for entry in metadata:
-            entry = augment_metadata_entry(entry, path_to_data, path_to_output)
-        new_metadata.append(entry)
+            augment_metadata_entry(entry, path_to_data, path_to_output)
     else:
         num_workers = None if num_workers < 0 else num_workers
         # pool = Pool(num_workers)
 
         args = [dict(entry=e, path_to_data=path_to_data, path_to_output=path_to_output) for e in metadata]
         
-        process_map(augment_metadata_entry_unpack, args, max_workers=num_workers, chunksize=4)
+        process_map(augment_metadata_entry_unpack, args, max_workers=num_workers, chunksize=20)
 
 def get_effect_chain_statistics(metadata):
     stats = {}
@@ -70,12 +68,14 @@ def get_effect_chain_statistics(metadata):
     print(stats)            
 
 def get_effect_chain_statistics_from_metadata_file(path_to_data):
-    metadata = utils.data.glob_metadata_entries(path_to_data)
+    metadata = utils.data.load_dataset_metadata(path_to_data)
     get_effect_chain_statistics(metadata)
 
 if __name__=="__main__":
     import argparse
     
+    parser = argparse.ArgumentParser()
+
     parser.add_argument('--path_to_data', type=str, required=True)
     parser.add_argument('--path_to_output', type=str, required=True)
     parser.add_argument('--num_workers', type=int, default=20)

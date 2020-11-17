@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-from instrument_recognition.utils.train_utils import timing, load_weights
+from instrument_recognition.utils.train import timing, load_weights
 from instrument_recognition.models.timefreq import Melspectrogram
 
 def get_model(n_mels=128, embedding_size=512):
@@ -24,7 +24,9 @@ def get_model(n_mels=128, embedding_size=512):
 class OpenL3Embedding(pl.LightningModule):
 
     def __init__(self, n_mels, embedding_size):
-        
+        super().__init__()
+        assert isinstance(n_mels, int)
+        assert isinstance(embedding_size, int)
         if embedding_size == 512:
             maxpool_kernel=(16, 24)
         elif embedding_size == 6144:
@@ -32,7 +34,7 @@ class OpenL3Embedding(pl.LightningModule):
         else: 
             raise ValueError(f'embedding size should be 512 or 6144 but got {embedding_size}')
 
-        assert n_mels in (128), "n_mels must be 128. 256 model is not supported yet"    
+        assert n_mels in (128, ), "n_mels must be 128. 256 model is not supported yet"    
         
         self.filters = Melspectrogram(sr=48000, n_mels=n_mels,
                                       fmin=0.0, fmax=None, power_melgram=1.0, 
