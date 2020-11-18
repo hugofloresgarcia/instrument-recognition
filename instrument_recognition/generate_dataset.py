@@ -142,7 +142,8 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
             label=label,
             chunk_size=chunk_size, 
             start_time=start_time, 
-            sr=sr))
+            sr=sr, 
+            effect_params=effect_params))
 
         # if both paths, already exists, bail
         if not os.path.exists(audio_chunk_path):
