@@ -9,7 +9,32 @@ import soundfile as sf
 import pandas as pd
 import medleydb as mdb
 
-import instrument_recognition as utils 
+import instrument_recognition.utils as utils 
+
+def get_full_effect_chain():
+    effect_chain = ['compand','overdrive', 'eq', 'pitch', 'speed', 
+                    'phaser', 'flanger', 'reverb', 'chorus', 'speed', 
+                    'lowpass']
+    return effect_chain
+
+def augment_from_file_to_file(input_path, output_path, effect_chain=None):
+    effect_chain = effect_chain if effect_chain is not None else get_full_effect_chain()
+    tfm, effect_params = utils.effects.get_random_transformer(effect_chain)
+    tfm.build_file(input_path, output_path)
+    return effect_params
+
+def augment_from_array_to_array(audio, sr, effect_chain=None):
+    effect_chain = effect_chain if effect_chain is not None else get_full_effect_chain()
+    tfm, effect_params = utils.effects.get_random_transformer(effect_chain)
+    
+    # for now, assert that audio is mono and convert to sox format
+    assert audio.ndim == 1
+    audio = np.expand_dims(audio, -1)
+    tfm_audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
+    audio = np.squeeze(audio, axis=-1)
+    tfm_audio = utils.audio.zero_pad(tfm_audio, audio.shape[0])
+    tfm_audio = tfm_audio[0:audio.shape[0]]
+    return tfm_audio, effect_params
 
 def get_abspath(path):
     return os.path.abspath(os.path.expanduser(path))
