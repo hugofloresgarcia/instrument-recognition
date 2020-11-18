@@ -60,7 +60,7 @@ def get_audio_chunk(audio, sr, start_time, chunk_size):
     return chunked_audio
 
 def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name, 
-                             label, path_to_output, metadata_extras):
+                             label, path_to_output, metadata_extras, augment=True):
     """ this function will chunk a monophonic audio array 
     into chunks as determined by chunk_size and hop_size. 
     The output audio file will be saved to a foreground folder, scaper style, 
@@ -98,6 +98,11 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
         audio_chunk_path = os.path.join(path_to_output, 
                                         f'{label}', 
                                         audio_chunk_name)
+        
+        if augment:
+            audio_chunk, effect_params = augment_from_array_to_array(audio_chunk, sr)
+        else:
+            effect_params = []
 
         # make path for metadata
         chunk_metadata_path = audio_chunk_path.replace('.wav', '.json')
