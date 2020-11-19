@@ -167,7 +167,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         # pick and log sample audio
         if batch_idx % 250 == 0:
             print(f'LOGGING RANDOM EXAMPLE')
-            self.log_random_example(batch, title='train-sample')
+            self.log_random_sample(batch, title='train-sample')
             # print(f'done:)')
         
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
@@ -186,7 +186,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
-            self.log_random_example(batch, title='val-sample')
+            self.log_random_sample(batch, title='val-sample')
 
         # metric logging
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
@@ -207,7 +207,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
-            self.log_random_example(batch, title='test-sample')
+            self.log_random_sample(batch, title='test-sample')
 
         # metric logging
         self.log('loss/test', result['loss'], logger=True)     
@@ -256,7 +256,21 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'recall/{prefix}', recall_score(y, yhat,  average='micro'), on_epoch=False)
         self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='micro', beta=1), on_epoch=False)
 
-    def log_random_example(self, batch, title='sample',):
+    def log_random_sample(self, batch, title='sample'):
+        idx = np.random.randint(0, len(audio))
+        pred = self.classes[batch['yhat'][idx]]
+        truth = self.classes[batch['y'][idx]]
+        path_to_audio = batch['path_to_audio'][idx]
+
+        self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
+            f'pred: {pred}\n truth:{truth}', 
+            self.global_step)
+
+        self.logger.experiment.add_text(f'{title}-path_to_audio/{truth}', 
+                                        str(path_to_audio), 
+                                        self.global_step)
+
+    def log_random_example_deprecated(self, batch, title='sample',):
         """
         log a random audio example with predictions and truths!
         """

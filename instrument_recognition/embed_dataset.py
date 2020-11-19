@@ -6,18 +6,18 @@ import tqdm
 
 import instrument_recognition.utils as utils
 
-from instrument_recognition.datasets.audio_dataset import AudioDataset
+from instrument_recognition.datasets.base_dataset import BaseDataset
 from instrument_recognition.models import torchopenl3
 
 def embed_dataset(path_to_data, path_to_output, 
                  embedding_model_name='openl3-128-512', 
                  batch_size=64, num_workers=18):
     # load our dataset
-    dataset = AudioDataset(path_to_data)
+    dataset = BaseDataset(path_to_data, embeddings=False)
 
     # make a dataloader
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, 
-                                         num_workers=num_workers)   
+                                         num_workers=num_workers)
 
     # get the model
     model = load_embedding_model(embedding_model_name)

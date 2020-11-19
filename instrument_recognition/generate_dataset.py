@@ -8,6 +8,7 @@ import soxbindings as sox
 import soundfile as sf
 import pandas as pd
 import medleydb as mdb
+import threading
 
 import instrument_recognition.utils as utils 
 
@@ -90,7 +91,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
     into chunks as determined by chunk_size and hop_size. 
     The output audio file will be saved to a foreground folder, scaper style, 
     under a subdirectory with a name determined by label. 
-    Besides the output audio file, it will create a .json file with metadata
+    Besides the output audio file, it will create a .yaml file with metadata
     for each corresponding audio file
     args:
         audio (np.ndarray): audio arrayshape (samples,)
@@ -119,7 +120,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
         # get current audio_chunk
         audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_size)
 
-        audio_chunk_name = base_chunk_name + f'-{start_time}.wav'
+        audio_chunk_name = base_chunk_name + f'/{start_time}.wav'
         audio_chunk_path = os.path.join(path_to_output, 
                                         f'{label}', 
                                         audio_chunk_name)
@@ -130,7 +131,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
             effect_params = []
 
         # make path for metadata
-        chunk_metadata_path = audio_chunk_path.replace('.wav', '.json')
+        chunk_metadata_path = audio_chunk_path.replace('.wav', '.yaml')
         
         os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
 
@@ -145,12 +146,15 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
             sr=sr, 
             effect_params=effect_params))
 
-        # if both paths, already exists, bail
-        if not os.path.exists(audio_chunk_path):
+        # if either of these don't exist, create both
+        if (not os.path.exists(chunk_metadata_path)) \
+            or (not os.path.exists(audio_chunk_path)):
+            print(f'- {start_time} -', end='')
             sf.write(audio_chunk_path, audio_chunk, sr, 'PCM_24')
-            utils.data.save_dict_json(entry, chunk_metadata_path)
+            utils.data.save_dict_yaml(entry, chunk_metadata_path)
         else:
-            print(f'already found: {audio_chunk_path} and {chunk_metadata_path}')
+            pass
+            # print(f'already found: {audio_chunk_path} and {chunk_metadata_path}')
 
         metadata.append(entry)
     
@@ -159,7 +163,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
 # args = path_to_output, mtrack, chunk_size, sr, hop_size
 def _process_mdb_track(args):
     metadata = []
-    path_to_output, mtrack, chunk_size, sr, hop_size = args
+    path_to_output, mtrack, chunk_size, sr, hop_size, augment = args
     # figure out whether we are going to add FX to this track or not
 
     for stem_id, stem in mtrack.stems.items():
@@ -182,7 +186,8 @@ def _process_mdb_track(args):
             # make sure we add medleydb metadata in just in case
             extras = dict(track_id=mtrack.track_id,
                         stem_idx=stem.stem_idx,
-                        instrument_list=stem.instrument)
+                        instrument_list=stem.instrument, 
+                        artist_id=mtrack.track_id.split('_')[0])
 
             # chunk up the audio and save it
             save_windowed_audio_events(
@@ -193,7 +198,8 @@ def _process_mdb_track(args):
                 base_chunk_name=base_chunk_name, 
                 label=stem.instrument[0],
                 path_to_output=path_to_output, 
-                metadata_extras=extras)
+                metadata_extras=extras, 
+                augment=augment)
         except Exception as e:
             print(f'exception occured: {e}')
             print(f'FAILED TO LOAD: {path_to_audio}')
@@ -202,12 +208,12 @@ def _process_mdb_track(args):
                             'error': True}]
             
 def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0, 
-                              hop_size=1.0, num_workers=-1):
+                              hop_size=1.0, num_workers=-1, augment=True):
 
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
     args = []
     for mtrack in mtrack_generator:
-        args.append((path_to_output, mtrack, chunk_size, sr, hop_size))
+        args.append((path_to_output, mtrack, chunk_size, sr, hop_size, augment))
 
     # run as a single process if num workers is less than 1
     if num_workers == 0:
@@ -219,7 +225,7 @@ def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0,
 
         # do the thing!
         pool.map(_process_mdb_track, args)
-        
+        # tqdm.contrib.concurrent.process_map(_process_mdb_track, args)
         pool.close()
         pool.join()
     
@@ -230,8 +236,8 @@ def fix_metadata_and_save_separate_dicts(metadata):
         if not isinstance(entry['path_to_audio'], str):
             print(entry)
             continue
-        path_to_json = entry['path_to_audio'].replace('.wav', '.json')
-        utils.data.save_dict_json(entry, path_to_json)
+        path_to_yaml = entry['path_to_audio'].replace('.wav', '.yaml')
+        utils.data.save_dict_yaml(entry, path_to_yaml)
     
 
 if __name__ == "__main__":
@@ -246,6 +252,7 @@ if __name__ == "__main__":
     parser.add_argument('--sr', type=int, default=48000)
     parser.add_argument('--chunk_size', type=float, default=1.0)
     parser.add_argument('--hop_size', type=float, default=1.0)
+    parser.add_argument('--augment', type=utils.train.str2bool, default=True)
 
     parser.add_argument('--num_workers', type=int, default=-1)
 

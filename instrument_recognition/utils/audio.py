@@ -156,4 +156,3 @@ def zero_pad(audio, length):
         audio = torch.from_numpy(audio).type_as(audio_type_ptr)
     
     return audio
-    
