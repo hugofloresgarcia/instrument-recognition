@@ -14,31 +14,21 @@ import torch.nn.functional as F
 import torchaudio
 import torchvision
 import pytorch_lightning as pl
-from pytorch_lightning.metrics import Accuracy, Precision, Recall, Fbeta
 from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta_score
 import sklearn
 import matplotlib.pyplot as plt
 
 import instrument_recognition.models as models
 import instrument_recognition.utils as utils
+import instrument_recognition.datasets.base_dataset as base_dataset
 
 def load_datamodule(hparams):
-    if hparams.dataset.lower() == 'philharmonia':
-        datamodule = PhilharmoniaDataModule(
-            batch_size=hparams.batch_size, 
-            num_workers=hparams.num_dataloader_workers)
-    elif hparams.dataset.lower() == 'slakh':
-        datamodule = SlakhDataModule(
-            batch_size=hparams.batch_size, 
-            num_workers=hparams.num_dataloader_workers)
-    elif hparams.dataset.lower() == 'medleydb':
-        datamodule = MDBDataModule(
-            batch_size=hparams.batch_size, 
-            num_workers=hparams.num_dataloader_workers)
-    else:
-        raise ValueError(f'invalid datamodule: {hparams.dataset.lower()}')
 
-    datamodule.setup()
+    datamodule = base_dataset.BaseDataModule(
+        path_to_data=hparams.path_to_data,
+        batch_size=hparams.batch_size, 
+        num_workers=hparams.num_workers)
+    
     return datamodule
 
 def load_model(hparams, output_units=None):
@@ -83,7 +73,7 @@ class InstrumentDetectionTask(pl.LightningModule):
     def add_model_specific_args(parent_parser):
         parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
         # OPTIMIZERS
-        parser.add_argument('--learning_rate',  default=1e-4,   type=float)
+        parser.add_argument('--learning_rate',  default=3e-4,   type=float)
 
         # LOGGING
         parser.add_argument('--log_epoch_metrics', default=True, type=utils.train.str2bool)
@@ -101,7 +91,6 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         return parser
 
-
     def forward(self, x):
         return self.model(x)
     #-------------------------------
@@ -117,6 +106,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def test_dataloader(self):
         return self.datamodule.test_dataloader()
+
     #-------------------------------
     #-------------------------------
     #---------- TRAINING -----------
@@ -192,6 +182,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
         self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='val')
+        if self.hparams.use_embeddings:
+            self.log_embedding(batch['X'], batch['y'])
 
         return result
 
@@ -255,6 +247,13 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'), on_epoch=False)
         self.log(f'recall/{prefix}', recall_score(y, yhat,  average='micro'), on_epoch=False)
         self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='micro', beta=1), on_epoch=False)
+
+    def log_embedding(self, embedding_batch, y):
+        assert embedding_batch.ndim == 2
+        assert y.ndim == 1
+        
+        labels = [self.classes[i] for i in y]
+        self.logger.experiment.add_embedding(embedding_batch, metadata=labels)
 
     def log_random_sample(self, batch, title='sample'):
         idx = np.random.randint(0, len(audio))
@@ -402,6 +401,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'precision/{prefix}/epoch', precision_score(y, yhat, average='micro'))
         self.log(f'recall/{prefix}/epoch', recall_score(y, yhat, average='micro'))
         self.log(f'fscore/{prefix}/epoch', fbeta_score(y, yhat, average='micro', beta=1))
+        self.logger.experiment.add_pr_curve(f'pr_curve/{prefix}', labels=y, predictions=yhat, global_step=self.global_step)
         self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
         self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
 
@@ -508,15 +508,16 @@ def get_task_parser():
     parser.add_argument('--export',         default=False, type=utils.train.str2bool)
 
     # TRAINER
-    parser.add_argument('--gpuid',          default=None, type=utils.train.noneint)
+    parser.add_argument('--gpuid',          default=0, type=utils.train.noneint)
 
     # DATASETS
-    parser.add_argument('--dataset',    default='philharmonia', type=str)
+    parser.add_argument('--path_to_data',    default='philharmonia', type=str)
     parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--num_dataloader_workers', default=13, type=int)
+    parser.add_argument('--num_workers', default=20, type=int)
+    parser.add_argument('--use_embeddings', default=False, type=utils.train.str2bool)
 
     # MODELS
-    parser.add_argument('--model',      default='tunedopenl3', type=str)
+    parser.add_argument('--model', default='tunedopenl3', type=str)
 
     return parser
 
@@ -531,7 +532,7 @@ if __name__ == "__main__":
     print('done w datamodule')
 
     # load model
-    model = load_model(hparams, output_units=len(datamodule.dataset.classes))
+    model = load_model(hparams, output_units=len(datamodule.get_classes()))
 
     # load task
     task =  InstrumentDetectionTask(hparams, model, datamodule)

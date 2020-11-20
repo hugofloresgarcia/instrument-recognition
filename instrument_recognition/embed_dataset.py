@@ -46,8 +46,8 @@ def embed_dataset(path_to_data, path_to_output,
             assert emb_out.ndim == 1
             np.save(path_to_embedding, emb_out)
 
-            path_to_entry = path_to_embedding.replace('.npy', '.json')
-            utils.data.save_dict_json(entry, path_to_entry)
+            path_to_entry = path_to_embedding.replace('.npy', '.yaml')
+            utils.data.save_dict_yaml(entry, path_to_entry)
 
 def load_embedding_model(model_name):
     if 'openl3' in model_name:

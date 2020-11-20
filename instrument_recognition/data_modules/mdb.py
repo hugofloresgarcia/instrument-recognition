@@ -13,92 +13,92 @@ import soundfile as sf
 import os
 import json
 
-from instrument_recognition.utils import audio_utils
-from instrument_recognition.utils.transforms import random_torchaudio_transform
+import instrument_recognition.utils.audio as audio_utils
+
 
 class_dict = {
-    'Main System': 'other',
-    # 'accordion'
-    # 'acoustic guitar'
-    'alto saxophone': 'reeds',
-    'auxiliary percussion': 'percussion',
-    'bamboo flute': 'pipe',
-    # 'banjo'
-    'baritone saxophone': 'reeds',
-    'bass clarinet': 'reeds',
-    # 'bass drum'
-    'bassoon': 'reeds',
-    'bongo': 'percussion',
-    'brass section': 'brass',
-    'cello': 'strings', 
-    'cello section': 'strings', 
-    'chimes': 'other',
-    'claps': 'percussion',
-    'clarinet': 'reeds',
-    'clarinet section': 'clarinet',
-    # 'clean electric guitar'
-    'cymbal': 'drum set',
-    'darbuka': 'other',
-    # 'distorted electric guitar'
-    'dizi': 'pipe',
-    'double bass': 'bass',
-    'doumbek': 'other',
-    # 'drum machine'
-    # 'drum set'
-    'electric bass': 'bass',
-    # 'electric piano'
-    'erhu': 'strings',
-    'female singer': 'female vocalist',
-    'flute': 'pipe',
-    'flute section': 'pipe',
-    'french horn': 'brass',
-    'french horn section': 'brass',
-    'fx/processed sound': 'other',
-    'glockenspiel' : 'chromatic percussion',
-    'gong': 'percussion',
-    # 'gu'
-    # 'guzheng'
-    # 'harmonica'
-    'harp': 'other', 
-    'horn section': 'brass',
-    'kick drum': 'drum set',
-    'lap steel guitar': 'acoustic guitar',
-    'liuqin': 'other',
-    'male rapper': 'male vocalist',
-    'male singer': 'male vocalist',
-    'male speaker': 'male vocalist',
-    # 'mandolin'
-    # 'melodica'
-    'oboe': 'reeds',
-    # 'oud'
-    # 'piano'
-    'piccolo' : 'pipe',
-    'sampler': 'other', 
-    'scratches': 'other', 
-    'shaker': 'percussion', 
-    'snare drum': 'drum set',
-    'soprano saxophone': 'reeds',
-    'string section': 'strings', 
-    # 'synthesizer'
-    'tabla': 'percussion',
-    'tack piano': 'piano',
-    'tambourine': 'percussion',
-    'tenor saxophone': 'reeds',
-    'timpani': 'percussion',
-    'toms': 'percussion',
-    'trombone': 'brass',
-    'trombone section': 'brass',
-    'trumpet': 'brass',
-    'trumpet section': 'brass',
-    'tuba': 'other',
-    'vibraphone': 'chromatic percussion',
-    'viola': 'strings', 
-    'viola section': 'strings', 
-    'violin': 'strings', 
-    'violin section': 'strings', 
-    # 'vocalists'
-    # 'yangqin'
-    # 'zhongruan'
+    # 'Main System': 'other',
+    # # 'accordion'
+    # # 'acoustic guitar'
+    # 'alto saxophone': 'reeds',
+    # 'auxiliary percussion': 'percussion',
+    # 'bamboo flute': 'pipe',
+    # # 'banjo'
+    # 'baritone saxophone': 'reeds',
+    # 'bass clarinet': 'reeds',
+    # # 'bass drum'
+    # 'bassoon': 'reeds',
+    # 'bongo': 'percussion',
+    # 'brass section': 'brass',
+    # 'cello': 'strings', 
+    # 'cello section': 'strings', 
+    # 'chimes': 'other',
+    # 'claps': 'percussion',
+    # 'clarinet': 'reeds',
+    # 'clarinet section': 'clarinet',
+    # # 'clean electric guitar'
+    # 'cymbal': 'drum set',
+    # 'darbuka': 'other',
+    # # 'distorted electric guitar'
+    # 'dizi': 'pipe',
+    # 'double bass': 'bass',
+    # 'doumbek': 'other',
+    # # 'drum machine'
+    # # 'drum set'
+    # 'electric bass': 'bass',
+    # # 'electric piano'
+    # 'erhu': 'strings',
+    # 'female singer': 'female vocalist',
+    # 'flute': 'pipe',
+    # 'flute section': 'pipe',
+    # 'french horn': 'brass',
+    # 'french horn section': 'brass',
+    # 'fx/processed sound': 'other',
+    # 'glockenspiel' : 'chromatic percussion',
+    # 'gong': 'percussion',
+    # # 'gu'
+    # # 'guzheng'
+    # # 'harmonica'
+    # 'harp': 'other', 
+    # 'horn section': 'brass',
+    # 'kick drum': 'drum set',
+    # 'lap steel guitar': 'acoustic guitar',
+    # 'liuqin': 'other',
+    # 'male rapper': 'male vocalist',
+    # 'male singer': 'male vocalist',
+    # 'male speaker': 'male vocalist',
+    # # 'mandolin'
+    # # 'melodica'
+    # 'oboe': 'reeds',
+    # # 'oud'
+    # # 'piano'
+    # 'piccolo' : 'pipe',
+    # 'sampler': 'other', 
+    # 'scratches': 'other', 
+    # 'shaker': 'percussion', 
+    # 'snare drum': 'drum set',
+    # 'soprano saxophone': 'reeds',
+    # 'string section': 'strings', 
+    # # 'synthesizer'
+    # 'tabla': 'percussion',
+    # 'tack piano': 'piano',
+    # 'tambourine': 'percussion',
+    # 'tenor saxophone': 'reeds',
+    # 'timpani': 'percussion',
+    # 'toms': 'percussion',
+    # 'trombone': 'brass',
+    # 'trombone section': 'brass',
+    # 'trumpet': 'brass',
+    # 'trumpet section': 'brass',
+    # 'tuba': 'other',
+    # 'vibraphone': 'chromatic percussion',
+    # 'viola': 'strings', 
+    # 'viola section': 'strings', 
+    # 'violin': 'strings', 
+    # 'violin section': 'strings', 
+    # # 'vocalists'
+    # # 'yangqin'
+    # # 'zhongruan'
 }
 
 # rack up the workers
@@ -137,7 +137,7 @@ def process_mtrack(args):
 
         # # make subdirs if needed
         # os.makedirs(os.path.dirname(audio_npy_path), exist_ok=True)
-        # print(f'saving {audio_npy_path}')
+        # #print(f'saving {audio_npy_path}')
 
         # if not os.path.exists(audio_npy_path):
         #     if transform_audio:
@@ -150,7 +150,7 @@ def process_mtrack(args):
 
         #     np.save(audio_npy_path, audio)
         # else:
-        #     print(f'already found: {audio_npy_path}')
+        #     #print(f'already found: {audio_npy_path}')
 
         # iterate through chunks
         for start_time in np.arange(0, n_chunks, hop_len):
@@ -165,18 +165,19 @@ def process_mtrack(args):
             audio_chunk_path = audio_chunk_path.replace('.wav', f'/{start_time}.npy')
             
             os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-            print(f'saving {audio_chunk_path}')
+            #print(f'saving {audio_chunk_path}')
 
             if not os.path.exists(audio_chunk_path):
                 if transform_audio:
                     audio_chunk = torch.from_numpy(audio_chunk)
-                    audio_chunk = random_torchaudio_transform(audio_chunk.unsqueeze(0), sr,
-                                ['flanger', 'phaser', 'overdrive', 'eq', 'compand', 'pitch', 'speed']).squeeze(0)
+                    # audio_chunk = random_torchaudio_transform(audio_chunk.unsqueeze(0), sr,
+                                # ['flanger', 'phaser', 'overdrive', 'eq', 'compand', 'pitch', 'speed']).squeeze(0)
                     audio_chunk = audio_chunk.numpy()
 
                 np.save(audio_chunk_path, audio_chunk)
             else:
-                print(f'already found: {audio_chunk_path}')
+                pass
+                #print(f'already found: {audio_chunk_path}')
 
             entry = dict(
                 # the definite stuff
@@ -191,7 +192,7 @@ def process_mtrack(args):
                 track_id=mtrack.track_id, 
                 stem_idx=stem.stem_idx, 
                 audio_transformed=transform_audio)
-            # print(entry)
+            # #print(entry)
             metadata.append(entry)
 
     return metadata
@@ -225,16 +226,16 @@ def generate_medleydb_metadata(chunk_len=1, sr=48000, hop_len=1.0, splits=None, 
     for mtrack in mtrack_generator:
         args.append((mtrack, chunk_len, sr, hop_len, splits, transform_train))
         
-    print(len(args))
+    #print(len(args))
 
     # do the thing!
     metadata = pool.map(process_mtrack, args)
     metadata = [entry for submetadata in metadata for entry in submetadata]
     pool.close()
     pool.join()
-    print(f'converting to list..')
+    #print(f'converting to list..')
 
-    print(len(metadata))
+    #print(len(metadata))
     # exit()
 
     return metadata
@@ -270,7 +271,7 @@ class MDBDataset(torch.utils.data.Dataset):
         self.train = train
 
         # get the split (for generating metadata)
-        self.splits = mdb.utils.artist_conditional_split(test_size=0.15, num_splits=1, 
+        self.splits = mdb.utils.artist_conditional_split(test_size=0.3, num_splits=1, 
                                                 random_state=random_seed)[0]
 
         # define metadata path
@@ -279,14 +280,14 @@ class MDBDataset(torch.utils.data.Dataset):
 
         # if we don't have the metadata, we need to generate it. 
         if not os.path.exists(path_to_metadata):
-            print('generating dataset and metadata')
+            #print('generating dataset and metadata')
             self.metadata = generate_medleydb_metadata(chunk_len=self.chunk_len, sr=self.sr, hop_len=self.hop_len, 
                                                         splits=self.splits, transform_train=True)
             
-            print('done generating dataset and metadata')
+            #print('done generating dataset and metadata')
             pd.DataFrame(self.metadata).to_csv(path_to_metadata, index=False)
         else:
-            print(f'found metadata: {path_to_metadata}')
+            #print(f'found metadata: {path_to_metadata}')
             self.metadata = pd.read_csv(path_to_metadata).to_dict('records')
 
         # strip unwated characters
@@ -303,11 +304,11 @@ class MDBDataset(torch.utils.data.Dataset):
         self.metadata = [e for e in self.metadata if not e['instrument'] == 'other']
         self.classes = self.get_classlist(self.metadata)
 
-        print(self.get_class_frequencies())
+        #print(self.get_class_frequencies())
 
         self.class_weights = np.array([1/pair[1] for pair in self.get_class_frequencies()])
         self.class_weights = self.class_weights / max(self.class_weights)
-        # [print(f'{c}-{w}') for c, w in zip(self.classes, self.class_weights)]
+        # [#print(f'{c}-{w}') for c, w in zip(self.classes, self.class_weights)]
 
     def __len__(self):
         return len(self.metadata)
@@ -319,16 +320,16 @@ class MDBDataset(torch.utils.data.Dataset):
         # start_sample = entry['start_time'] * entry['sr']
         # audio_len = entry['duration'] * entry['sr']
         # audiomm = np.memmap(entry['path_to_audio'], np.float32, 'c', offset=start_sample, shape=(audio_len))
-        # print(audiomm.shape)
-        # print(id(audiomm))
+        # #print(audiomm.shape)
+        # #print(id(audiomm))
         start_sample = entry['start_time'] * entry['sr']
         end_sample = start_sample + entry['duration'] * entry['sr']
         audio = audio[start_sample:end_sample]
         audio = torch.from_numpy(audio).clone().float()
         # audio = torch.zeros(48000)
         # del audiomm
-        # print(audio.shape)
-        # print(id(audio))
+        # #print(audio.shape)
+        # #print(id(audio))
         # exit()
         audio = audio.unsqueeze(0)
         
@@ -377,16 +378,16 @@ class MDBDataset(torch.utils.data.Dataset):
             if c not in test_classes:
                 missing_test_classes.append(c)
 
-        # print(f'classes missing from test data:')
-        # print(missing_test_classes)
+        # #print(f'classes missing from test data:')
+        # #print(missing_test_classes)
 
         missing_train_classes = []
         for c in test_classes:
             if c not in train_classes:
                 missing_train_classes.append(c)
 
-        # print(f'classes missing from train data:')
-        # print(missing_train_classes)
+        # #print(f'classes missing from train data:')
+        # #print(missing_train_classes)
 
         # first, remap missing classes in train set to other
         soft_remap = {
@@ -396,8 +397,8 @@ class MDBDataset(torch.utils.data.Dataset):
             'drum': 'drum set', 
             'flute': 'flute', 
             'trombone': 'trombone', 
-            'piano': 'piano',
-            'male': 'male vocalist'}
+            'piano': 'piano',}
+            # 'male': 'male vocalist'}
 
         hard_remap = {}
         for classlist in [missing_train_classes, missing_test_classes]:
@@ -412,6 +413,7 @@ class MDBDataset(torch.utils.data.Dataset):
                 if not remapped:
                     hard_remap[c] = 'other'
         
+        #print(hard_remap)
         self.remap_classes(train_metadata, hard_remap)
         self.remap_classes(test_metadata, hard_remap)
 
@@ -529,12 +531,12 @@ class MDBDataModule(pl.LightningDataModule):
         self.val_data = val_data
         self.test_data = test_data
 
-        print('TRAIN DATASET')
-        [print(pair) for pair in self.train_data.get_class_frequencies()]
-        print('VALIDATION DATASET')
-        [print(pair) for pair in self.val_data.get_class_frequencies()]
-        print('TEST DATASET')
-        [print(pair) for pair in self.test_data.get_class_frequencies()]
+        # #print('TRAIN DATASET')
+        # [#print(pair) for pair in self.train_data.get_class_frequencies()]
+        # #print('VALIDATION DATASET')
+        # [#print(pair) for pair in self.val_data.get_class_frequencies()]
+        # #print('TEST DATASET')
+        # [#print(pair) for pair in self.test_data.get_class_frequencies()]
 
     def setup(self):
         self.load_dataset() 
@@ -566,7 +568,7 @@ class CollateAudio:
         collate a batch of dataset samples and resample to a 
         uniform sample rate for proper batch_processing
         """
-        # print(batch)
+        # #print(batch)
         audio = [e['X'] for e in batch]
         labels = [e['y'] for e in batch]
 
@@ -583,25 +585,27 @@ class CollateAudio:
 if __name__ == "__main__":
     # find a random split that maximizes overlap between instrument classes
     import time
-    train_dataset = MDBDataset(train=True, random_seed=4)
-    # print([p for p in dataset.get_class_frequencies()])
+    train_dataset = MDBDataset(train=True, random_seed=0)
+    # #print([p for p in dataset.get_class_frequencies()])
 
-    val_dataset = MDBDataset(train=False, random_seed=4)
-    # print([p for p in dataset.get_class_frequencies()])
+    val_dataset = MDBDataset(train=False, random_seed=0)
+    # #print([p for p in dataset.get_class_frequencies()])
 
     
-    # scoreboard = {}
-    # for seed in range(50):
-    #     train_dataset = MDBDataset(train=True, random_seed=seed)
-    #     val_dataset = MDBDataset(train=False, random_seed=seed)
+    scoreboard = {}
+    for seed in range(50):
+        try:
+            train_dataset = MDBDataset(train=True, random_seed=seed)
+            val_dataset = MDBDataset(train=False, random_seed=seed)
+            print(seed, len(train_dataset.classes), train_dataset.classes)
+            assert len(train_dataset.classes) == len(val_dataset.classes)
+            print('assertion passed')
+            
+            scoreboard[seed] = len(train_dataset.classes)
+        except AssertionError:
+            print('assertion failed')
+            scoreboard[seed] = -1
 
-    #     missing_val_classes = []
-    #     for c in train_dataset.classes:
-    #         if c not in val_dataset.classes:
-    #             missing_val_classes.append(c)
-        
-    #     scoreboard[seed] = len(missing_val_classes)
-
-    # scoreboard = sorted(scoreboard.items(), key=lambda x: x[1])
-    # print(scoreboard)
+    scoreboard = sorted(scoreboard.items(), key=lambda x: x[1])
+    print(scoreboard)
     

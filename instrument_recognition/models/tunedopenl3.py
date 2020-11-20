@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 
 from instrument_recognition.models.timefreq import Melspectrogram
-from instrument_recognition.models.torchopenl3 import OpenL3Mel128, LayerUnfreezeCallback
+from instrument_recognition.models.torchopenl3 import OpenL3Mel128
 
 import instrument_recognition.utils as utils
 
@@ -39,15 +39,7 @@ class TunedOpenL3(pl.LightningModule):
                 nn.Dropout(p=self.hparams.dropout),
 
                 nn.Linear(128, num_output_units))
-
-        # set up unfreeze callbacks
-        if self.hparams.openl3_freeze:
-            # self.openl3.freeze()
-            self.is_frozen = True
-            self.callback_list = [LayerUnfreezeCallback(self.openl3, self.hparams.openl3_unfreeze_epoch)] 
-        else:
-            self.callback_list =  []
-
+                
     def forward(self, x):
         if self.openl3.use_kapre:
             # NOTE: still need to do pass thru filters

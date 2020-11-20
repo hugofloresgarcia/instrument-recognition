@@ -54,7 +54,7 @@ def add_effect_with_random_params(tfm, effect_name):
 
     elif 'overdrive' == effect_name:
         params = dict(
-                gain_db=get_randn(mu=20, std=5, min=0, max=40), 
+                gain_db=get_randn(mu=10, std=5, min=0, max=40), 
                 colour=get_randn(mu=20, std=5, min=0, max=40))
         tfm.overdrive(**params)
 
@@ -69,14 +69,14 @@ def add_effect_with_random_params(tfm, effect_name):
             octave = choose([2 ** i for i in range(8)])
             sub_params = dict(
                 frequency=get_randn(mu=60, std=10, min=40, max=80) * octave, 
-                gain_db=get_randn(mu=0, std=5, min=-24, max=24), 
+                gain_db=get_randn(mu=0, std=6, min=-24, max=24), 
                 width_q=get_randn(mu=0.707, std=0.1415, min=0.3, max=1.4))
             tfm.equalizer(**sub_params)
 
             params[filter_num] = sub_params
 
     elif 'pitch' == effect_name:
-        params = dict(n_semitones=get_randn(mu=0, std=0.5, min=-3, max=3))
+        params = dict(n_semitones=get_randn(mu=0, std=1, min=-3, max=3))
         tfm.pitch(**params)
     
     elif 'reverb' == effect_name:

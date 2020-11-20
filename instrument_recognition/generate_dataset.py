@@ -142,7 +142,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
             path_to_audio=audio_chunk_path,
             label=label,
             chunk_size=chunk_size, 
-            start_time=start_time, 
+            start_time=float(start_time), 
             sr=sr, 
             effect_params=effect_params))
 

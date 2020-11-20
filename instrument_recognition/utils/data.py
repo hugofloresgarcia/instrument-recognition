@@ -55,7 +55,7 @@ def glob_metadata_entries(path_to_dataset, pattern='**/*.yaml'):
     pattern = os.path.join(path_to_dataset, pattern)
     filepaths = glob.glob(pattern, recursive=True)
 
-    metadata = tqdm.contrib.concurrent.process_map(load_dict_json, filepaths, max_workers=20, chunksize=20)
+    metadata = tqdm.contrib.concurrent.process_map(load_dict_yaml, filepaths, max_workers=20, chunksize=20)
 
     # metadata = [load_dict_json(path) for path in filepath_iterator]
 
