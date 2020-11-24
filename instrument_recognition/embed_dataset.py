@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 import tqdm
+import openl3
 
 import instrument_recognition.utils as utils
 
@@ -13,7 +14,7 @@ def embed_dataset(path_to_data, path_to_output,
                  embedding_model_name='openl3-128-512', 
                  batch_size=64, num_workers=18):
     # load our dataset
-    dataset = BaseDataset(path_to_data, embeddings=False)
+    dataset = BaseDataset(path_to_data, use_embeddings=False)
 
     # make a dataloader
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, 

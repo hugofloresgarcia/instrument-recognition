@@ -1,0 +1,49 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        
+        {
+            "name": "frozen-tiny",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal", 
+            "args": [
+                    "--model",                      "openlclassifier", 
+                    "--use_embeddings",             "True", 
+                    "--batch_size",                 "64", 
+                    "--accumulate_grad_batches",    "2", 
+                    "--path_to_data",               "~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDINGS/splits/", 
+                    "--val_check_interval",         "0.5", 
+                    "--name",                       "frozen-tiny",
+                    "--version",                    "0",
+                    "--gpuid",                      "0",
+            ]
+        },
+
+        {
+            "name": "frozen-tiny-mix",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal", 
+            "args": [
+                    "--model",                      "openlclassifier", 
+                    "--use_embeddings",             "True", 
+                    "--batch_size",                 "64", 
+                    "--accumulate_grad_batches",    "2", 
+                    "--path_to_data",               "~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDINGS/splits/", 
+                    "--val_check_interval",         "0.5", 
+                    "--name",                       "frozen-tiny-mix",
+                    "--mixup",                      "True", 
+                    "--mixup_alpha",                "0.2",
+                    "--version",                    "0",
+                    "--gpuid",                      "0",
+            ]
+        }
+    ]
+}

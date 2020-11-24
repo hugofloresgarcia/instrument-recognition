@@ -7,6 +7,16 @@ import pandas as pd
 import tqdm.contrib.concurrent
 from sklearn.model_selection import train_test_split
 
+def get_classlist(metadata):
+    """ iterate through metadata and get the set
+        of all labels
+    """
+    for e in metadata:
+        e['label'] = str(e['label'].strip('[]\''))
+    classes = list(set([e['label'] for e in metadata]))
+    classes.sort()
+    return classes
+
 def load_metadata_csv(path_to_metadata):
     assert os.path.exists(path_to_metadata), f"{path_to_metadata} does not exist"
     metadata = pd.read_csv(path_to_metadata).to_dict('records')

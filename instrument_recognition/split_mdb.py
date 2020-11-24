@@ -19,44 +19,56 @@ class MDBDataset(BaseDataset):
                                                 random_state=random_seed)[0]
 
 def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=20):
-    split_track_ids = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
+    # define split
+    splits = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
                                                 random_state=random_seed)[0]
     
-    train_track_ids = split_track_ids['train']
-    test_track_ids = split_track_ids['test']
+    # load metadata
+    metadata = utils.data.load_dataset_metadata(path_to_data)
 
+    # split metadata into train and test according to splits
+    train_metadata = [e for e in metadata if e['track_id'] in splits['train']]
+    test_metadata = [e for e in metadata if e['track_id'] in splits['test']]
+
+    # define the base dirs for our new metadata
     base_train_path = os.path.abspath(os.path.join(path_to_output, 'train'))+'/'
     base_test_path = (os.path.join(path_to_output, 'test'))+'/'
 
-    
+    # get classlist for train and test
+    train_classes = utils.data.get_classlist(train_metadata)
+    test_classes = utils.data.get_classlist(test_metadata)
 
-    # get the corresponding trackid for every path
-    print('loading track ids for all files')
-    metadata_paths = glob.iglob(
-        os.path.join(path_to_data, '**/*.yaml'), recursive=True)
-    track_id_dict = {}
-    for p in metadata_paths:
-        p = os.abspath(p)
-        print(f'loading {p}')
-        track_id_dict[p] = utils.data.load_dict_yaml(p)['track_id']
+    # find the intersection between the two classlists
+    filtered_classes = list(set(train_classes) & set(test_classes))
+    print(filtered_classes)
 
-    not_in_split = []
-    for path, track_id in track_id_dict.items():
-        if track_id in train_track_ids:
-            new_path = path.replace(path_to_data, base_train_path)
-            os.makedirs(os.path.dirname(new_path), exist_ok=True)
-            print(f'copying {path} to {new_path}')
-            shutil.copy(path, new_path)
-        elif track_id in test_track_ids:
-            new_path = path.replace(path_to_data, base_test_path)
-            os.makedirs(os.path.dirname(new_path), exist_ok=True)
-            print(f'copying {path} to {new_path}')
-            shutil.copy(path, new_path)
-        else:
-            not_in_split.append(track_id)
+    # delete any entry that isnt in the filtered classes
+    train_metadata = [e for e in metadata if e['label'] in filtered_classes]
+    test_metadata = [e for e in metadata if e['label'] in filtered_classes]
+
+    # save new metadata to csv in out output path
+    os.makedirs(os.path.join(base_train_path), exist_ok=True)
+    os.makedirs(os.path.join(base_test_path), exist_ok=True)
+    utils.data.save_metadata_csv(train_metadata, os.path.join(base_train_path, 'metadata.csv'))
+    utils.data.save_metadata_csv(test_metadata, os.path.join(base_test_path, 'metadata.csv'))
+
+    # checking to see if this actually works
+    t = utils.data.load_metadata_csv(os.path.join(base_train_path, 'metadata.csv'))
+    for etest, e in zip(t, train_metadata):
+        print('making sure everythings ok')
+        try:
+            assert etest == e
+        except AssertionError:
+            print(f'comparison failed: \n\t {etest} \n\t {e}')
 
     print('done! :)')
-    print(f'the following files are missing: {not_in_split}')
+
+def find_missing_classes(a, b):
+    "find out how many classes in a are missing in b"
+    missing_b_classes = []
+    for c in a:
+        if c not in b:
+            missing_b_classes.append(c)
 
 if __name__ == "__main__":
     import argparse

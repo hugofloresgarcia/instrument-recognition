@@ -1,7 +1,7 @@
 from instrument_recognition.models.torchopenl3 import OpenL3Mel128
 from instrument_recognition.models.timefreq import Melspectrogram
 
-openl3_torch = OpenL3Mel128(maxpool_kernel=(4, 8), use_kapre=True)
+openl3_torch = OpenL3Mel128(maxpool_kernel=(16, 24), use_kapre=True)
 newspec = Melspectrogram()
 
 #-----------------------------
@@ -10,7 +10,7 @@ newspec = Melspectrogram()
 
 import openl3
 import torch 
-openl3_keras = openl3.models.load_audio_embedding_model(input_repr='mel128', content_type='music', embedding_size=6144)
+openl3_keras = openl3.models.load_audio_embedding_model(input_repr='mel128', content_type='music', embedding_size=512)
 
 # openl3_keras.summary()
 #-----------------------------
@@ -31,14 +31,14 @@ openl3_keras = openl3.models.load_audio_embedding_model(input_repr='mel128', con
 # openl3_nospec = Model(inputs=[inp], outputs=[x])
 
 import numpy as np
-openl3_torch.eval()
+openl3_torch.freeze()
 
 import torchaudio
-import instrument_recognition.utils.audio_utils as audio_utils
+import instrument_recognition.utils.audio as audio_utils
 # random audio
 audio, sr = torchaudio.load('/home/hugo/CHONK/data/philharmonia/all-samples/banjo/banjo_Cs5_very-long_forte_normal.mp3')
 audio = audio_utils.resample(audio.unsqueeze(0), sr, 48000).numpy()[:, :, 0:48000]
-audio = torch.randn(1000, 1, 48000).numpy()
+audio = torch.randn(5, 1, 48000).numpy()
 
 torch_result = openl3_torch(openl3_torch.melspec(audio)).permute(0, 2, 3, 1).reshape(-1).detach().numpy()
 torch_newspecresult = openl3_torch(newspec(torch.from_numpy(audio).float())).permute(0, 2, 3, 1).reshape(-1).detach().numpy()

@@ -18,6 +18,11 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta
 import sklearn
 import matplotlib.pyplot as plt
 
+import tensorflow as tf
+import tensorboard as tb
+tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
+
+
 import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 import instrument_recognition.datasets.base_dataset as base_dataset
@@ -27,16 +32,20 @@ def load_datamodule(hparams):
     datamodule = base_dataset.BaseDataModule(
         path_to_data=hparams.path_to_data,
         batch_size=hparams.batch_size, 
-        num_workers=hparams.num_workers)
+        num_workers=hparams.num_workers,
+        use_embeddings=hparams.use_embeddings)
+    datamodule.setup()
     
     return datamodule
 
 def load_model(hparams, output_units=None):
     if hparams.model.lower() == 'tunedopenl3':
-        model = models.tunedopenl3TunedOpenL3(hparams, output_units)
+        from instrument_recognition.models.tunedopenl3 import TunedOpenL3
+        model = TunedOpenL3(hparams, output_units)
 
     elif hparams.model.lower() == 'openlclassifier':
-        model = models.openlclassifier.OpenLClassifier(hparams, output_units)  
+        from instrument_recognition.models import openlclassifier
+        model = openlclassifier.OpenLClassifier(hparams, output_units)  
 
     return model       
 
@@ -60,11 +69,11 @@ class InstrumentDetectionTask(pl.LightningModule):
             self.class_weights = None
 
         self.model = model
-        self.model.log_layers = ['model.' + l for l in self.model.log_layers]
+        # self.model.log_layers = ['model.' + l for l in self.model.log_layers]
 
         # register forward hooks for model's logging layers
-        self.fwd_hooks = OrderedDict()
-        self.register_all_hooks()
+        # self.fwd_hooks = OrderedDict()
+        # self.register_all_hooks()
 
         #  logging
         self.log_dir = None
@@ -170,9 +179,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         # update the batch with the result 
         batch.update(result)
 
-        # log layers defined by model
-        for layer in self.model.log_layers:
-            self.log_layer_io(layer)
+        # # log layers defined by model
+        # for layer in self.model.log_layers:
+        #     self.log_layer_io(layer)
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
@@ -182,8 +191,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
         self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='val')
-        if self.hparams.use_embeddings:
-            self.log_embedding(batch['X'], batch['y'])
+        # if self.hparams.use_embeddings:
+        #     self.log_embedding( batch['X'], batch['y'], batch['path_to_audio'],'embeddings/val')
 
         return result
 
@@ -193,9 +202,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         # update the batch with the result 
         batch.update(result)
 
-        # log layers defined by model
-        for layer in self.model.log_layers:
-            self.log_layer_io(layer)
+        # # log layers defined by model
+        # for layer in self.model.log_layers:
+        #     self.log_layer_io(layer)
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
@@ -248,15 +257,14 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'recall/{prefix}', recall_score(y, yhat,  average='micro'), on_epoch=False)
         self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='micro', beta=1), on_epoch=False)
 
-    def log_embedding(self, embedding_batch, y):
+    def log_embedding(self, embedding_batch, y, metadata, title):
         assert embedding_batch.ndim == 2
         assert y.ndim == 1
         
-        labels = [self.classes[i] for i in y]
-        self.logger.experiment.add_embedding(embedding_batch, metadata=labels)
+        self.logger.experiment.add_embedding(embedding_batch,tag=title,  metadata=metadata, global_step=self.global_step)
 
     def log_random_sample(self, batch, title='sample'):
-        idx = np.random.randint(0, len(audio))
+        idx = np.random.randint(0, len(batch['X']))
         pred = self.classes[batch['yhat'][idx]]
         truth = self.classes[batch['y'][idx]]
         path_to_audio = batch['path_to_audio'][idx]

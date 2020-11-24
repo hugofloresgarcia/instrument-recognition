@@ -25,3 +25,9 @@ python task.py --num_dataloader_workers 18 --batch_size 16 --accumulate_grad_bat
 
 
 
+
+## openl3classifier
+
+python task.py --model openlclassifier --use_embeddings True --batch_size 64 --accumulate_grad_batches 2 --path_to_data ~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDINGS/splits/ --val_check_interval 0.25 --name frozen-tiny --version 0 --gpuid 0
+
+python task.py --model openlclassifier --use_embeddings True --batch_size 64 --mulate_grad_batches 2 --path_to_data ~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDED/splits/ --val_check_interval 0.25 --name frozen-tiny-mix --version 0 --mixup true --mixup_alpha 0.2

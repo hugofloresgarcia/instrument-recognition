@@ -20,4 +20,5 @@ class OpenLClassifier(pl.LightningModule):
             nn.Linear(128, num_output_units))
         
     def forward(self, x):
+        # print(x.shape)
         return self.fc(x)

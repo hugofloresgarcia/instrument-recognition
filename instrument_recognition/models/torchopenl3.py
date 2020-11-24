@@ -193,6 +193,6 @@ class OpenL3Mel128(pl.LightningModule):
         else:
             layer.bias.data.fill_(0)
 
-        # layer.state_dict()['running_mean'].copy_(torch.from_numpy(self._weights_dict[name]['mean']))
-        # layer.state_dict()['running_var'].copy_(torch.from_numpy(self._weights_dict[name]['var']))
+        layer.state_dict()['running_mean'].copy_(torch.from_numpy(self._weights_dict[name]['mean']))
+        layer.state_dict()['running_var'].copy_(torch.from_numpy(self._weights_dict[name]['var']))
         return layer
