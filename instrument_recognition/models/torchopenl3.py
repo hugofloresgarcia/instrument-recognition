@@ -16,10 +16,16 @@ def get_model(n_mels=128, embedding_size=512):
         maxpool_kernel=(16, 24)
     elif embedding_size == 6144:
         maxpool_kernel=(4, 8)
-    else: 
+    else:
         raise ValueError(f'embedding size should be 512 or 6144 but got {embedding_size}')
 
-    return OpenL3Mel128(maxpool_kernel=maxpool_kernel)
+    assert n_mels in (128,), "n_mels should be 128"
+    spec = Melspectrogram(n_mels=n_mels)
+
+    conv = OpenL3Mel128(maxpool_kernel=maxpool_kernel)
+
+    model = nn.Sequential(spec, conv)
+    return model
     
 class OpenL3Embedding(pl.LightningModule):
 
@@ -77,7 +83,7 @@ def _get_kapre_melspectrogram_model(input_shape):
 class OpenL3Mel128(pl.LightningModule):
 
     def __init__(self, 
-                weight_file='./weights/openl3/openl3_music_6144_no_mel_layer_pytorch_weights', 
+                weight_file='/home/hugo/lab/mono_music_sed/instrument_recognition/weights/openl3/openl3_music_6144_no_mel_layer_pytorch_weights', 
                 input_shape=(1, 48000), 
                 maxpool_kernel=(16, 24), 
                 maxpool_stride=(4, 8), 

@@ -22,10 +22,11 @@ import tensorflow as tf
 import tensorboard as tb
 tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
 
-
 import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 import instrument_recognition.datasets.base_dataset as base_dataset
+
+DEFAULT_CONFIG_PATH = '/home/hugo/lab/mono_music_sed/instrument_recognition/configs/default.yaml'
 
 def load_datamodule(hparams):
 
@@ -455,8 +456,10 @@ def train_instrument_detection_task(hparams, model):
         callbacks = []
 
     if hparams.gpuid is not None:
-        gpus = [hparams.gpuid]
-        
+        if hparams.gpuid == -1:
+            gpus = -1
+        else:
+            gpus = [hparams.gpuid]
     else:
         gpus = None
 
@@ -473,7 +476,7 @@ def train_instrument_detection_task(hparams, model):
         weights_summary='full', 
         log_gpu_memory=True, 
         gpus=gpus,
-        # profiler=pl.profiler.AdvancedProfiler(), 
+        profiler=True, 
         gradient_clip_val=1)
 
     if hparams.gpuid is not None:
@@ -493,8 +496,10 @@ def train_instrument_detection_task(hparams, model):
                                 #             f'model_torchscript.pt'))
 
 def get_task_parser():
-    import argparse
-    parser = argparse.ArgumentParser()
+    import configargparse
+    parser = configargparse.ArgParser(default_config_files=[DEFAULT_CONFIG_PATH])
+
+    parser.add_argument('-c', '--my-config', required=True, is_config_file=True)
 
     # by default, the instrument detection task will train
     # TunedOpenL3 

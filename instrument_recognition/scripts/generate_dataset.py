@@ -112,6 +112,8 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
 
     metadata = []
 
+    print(f'augment set to {augment}')
+
     # iterate through chunks
     for start_time in np.arange(0, n_chunks, hop_size):
         # round start time bc of floating pt errors
@@ -200,6 +202,7 @@ def _process_mdb_track(args):
                 path_to_output=path_to_output, 
                 metadata_extras=extras, 
                 augment=augment)
+
         except Exception as e:
             print(f'exception occured: {e}')
             print(f'FAILED TO LOAD: {path_to_audio}')
@@ -238,7 +241,6 @@ def fix_metadata_and_save_separate_dicts(metadata):
             continue
         path_to_yaml = entry['path_to_audio'].replace('.wav', '.yaml')
         utils.data.save_dict_yaml(entry, path_to_yaml)
-    
 
 if __name__ == "__main__":
     import argparse
@@ -263,4 +265,5 @@ if __name__ == "__main__":
         sr=args.sr,
         chunk_size=args.chunk_size, 
         hop_size=args.hop_size, 
-        num_workers=args.num_workers)
+        num_workers=args.num_workers, 
+        augment=args.augment)

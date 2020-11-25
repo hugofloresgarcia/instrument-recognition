@@ -1,0 +1,24 @@
+name: tunedopenl3-mix
+model: tunedopenl3
+
+version: 0
+gpuid: 0
+
+# training
+use_embeddings: False
+batch_size: 64 
+accumulate_grad_batches: 2
+val_check_interval: 0.25
+learning_rate: 0.0003
+dropout: 0.5
+weighted_cross_entropy: True
+
+# mixup
+mixup: True
+mixup_alpha: 0.2
+
+path_to_data: ~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDED/splits/
+
+random_seed: 20
+verbose: True
+

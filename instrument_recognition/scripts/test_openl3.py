@@ -38,12 +38,13 @@ import instrument_recognition.utils.audio as audio_utils
 # random audio
 audio, sr = torchaudio.load('/home/hugo/CHONK/data/philharmonia/all-samples/banjo/banjo_Cs5_very-long_forte_normal.mp3')
 audio = audio_utils.resample(audio.unsqueeze(0), sr, 48000).numpy()[:, :, 0:48000]
-audio = torch.randn(5, 1, 48000).numpy()
+audio = torch.randn(1, 1, 48000).numpy()
 
 torch_result = openl3_torch(openl3_torch.melspec(audio)).permute(0, 2, 3, 1).reshape(-1).detach().numpy()
 torch_newspecresult = openl3_torch(newspec(torch.from_numpy(audio).float())).permute(0, 2, 3, 1).reshape(-1).detach().numpy()
 # keras_nospec_result = openl3_nospec.predict(openl3_torch.melspec(audio).detach().numpy().transpose(0, 2, 3, 1)).flatten()
 keras_result = openl3_keras.predict(audio).flatten()
+keras_result, _ = openl3.get_audio_embedding(audio[0][0], 48000, center=False, input_repr='mel128', content_type='music', embedding_size=512)
 
 #----
 keras_melspec = openl3_torch.melspec(audio)

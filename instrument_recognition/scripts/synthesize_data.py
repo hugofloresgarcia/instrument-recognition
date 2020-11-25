@@ -18,7 +18,6 @@ def generate_soundscape(foreground_folder, background_folder,
                     random_state=seed)
     sc.ref_db = ref_db
 
-    
     for soundscape_idx in range(num_soundscapes):
         sc.reset_bg_event_spec()
         sc.reset_fg_event_spec()

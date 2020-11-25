@@ -5,6 +5,45 @@
     "version": "0.2.0",
     "configurations": [
 
+        {
+            "name": "unfrozen",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal", 
+            "args": [
+                    "--model",                      "tunedopenl3", 
+                    "--use_embeddings",             "False", 
+                    "--batch_size",                 "64", 
+                    "--accumulate_grad_batches",    "2", 
+                    "--path_to_data",               "~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDINGS/splits/", 
+                    "--val_check_interval",         "0.25", 
+                    "--name",                       "unfrozen",
+                    "--version",                    "0",
+                    "--gpuid",                      "0",
+            ]
+        },
+
+        {
+            "name": "unfrozen-mix",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal", 
+            "args": [
+                    "--model",                      "tunedopenl3", 
+                    "--use_embeddings",             "False", 
+                    "--batch_size",                 "64", 
+                    "--accumulate_grad_batches",    "2", 
+                    "--path_to_data",               "~/CHONK/data/mdb-hop-0.25-chunk-1-AUG-EMBEDDINGS/splits/", 
+                    "--val_check_interval",         "0.25", 
+                    "--name",                       "unfrozen-mix",
+                    "--mixup",                      "True", 
+                    "--mixup_alpha",                "0.2",
+                    "--version",                    "0",
+                    "--gpuid",                      "2",
+            ]
+        },
         
         {
             "name": "frozen-tiny",
@@ -21,7 +60,7 @@
                     "--val_check_interval",         "0.5", 
                     "--name",                       "frozen-tiny",
                     "--version",                    "0",
-                    "--gpuid",                      "0",
+                    "--gpuid",                      "1",
             ]
         },
 
@@ -42,7 +81,7 @@
                     "--mixup",                      "True", 
                     "--mixup_alpha",                "0.2",
                     "--version",                    "0",
-                    "--gpuid",                      "0",
+                    "--gpuid",                      "2",
             ]
         }
     ]

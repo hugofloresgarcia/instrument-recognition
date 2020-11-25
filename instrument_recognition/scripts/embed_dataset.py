@@ -10,6 +10,16 @@ import instrument_recognition.utils as utils
 from instrument_recognition.datasets.base_dataset import BaseDataset
 from instrument_recognition.models import torchopenl3
 
+def get_original_openl3_embedding(model, X):
+    e =[]
+    for x in X:
+        emb, _ = openl3.get_audio_embedding(x[0].detach().cpu().numpy(), 48000, model, verbose=False)
+        emb = torch.from_numpy(emb)
+        e.append(emb[0])
+    e = torch.stack(e)
+    assert e.ndim == 2
+    return e
+
 def embed_dataset(path_to_data, path_to_output, 
                  embedding_model_name='openl3-128-512', 
                  batch_size=64, num_workers=18):
@@ -23,21 +33,25 @@ def embed_dataset(path_to_data, path_to_output,
     # get the model
     model = load_embedding_model(embedding_model_name)
     model.freeze()
-    model = model.cuda()
+    model = model
+
+    # import openl3 
+    # openl3_model = openl3.models.load_audio_embedding_model("mel128", content_type="music", embedding_size=512)
 
     # embed batches
     pbar = tqdm.tqdm(loader)
     for batch in pbar:
         # get embedding
-        X = batch['X'].cuda()
+        X = batch['X']
         embedding = model(X)
+        # embedding = get_original_openl3_embedding(openl3_model, X)
 
         # save embedding in numpy format
         for i, metadata_index in enumerate(batch['metadata_index']):
             entry = dict(dataset.metadata[metadata_index])
 
             # get the path to audio and make an embedding path from it 
-            path_to_embedding = entry['path_to_audio'].replace(path_to_data, path_to_output)
+            path_to_embedding = entry['path_to_audio'].replace(path_to_data, path_to_output+'/')
             assert 'wav' in entry['path_to_audio']
             path_to_embedding = path_to_embedding.replace('.wav', '.npy')
             os.makedirs(os.path.dirname(path_to_embedding), exist_ok=True)

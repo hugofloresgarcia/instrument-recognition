@@ -7,17 +7,6 @@ import medleydb as mdb
 import instrument_recognition.utils as utils
 from instrument_recognition.datasets.base_dataset import BaseDataset, BaseDataModule
 
-class MDBDataset(BaseDataset):
-
-    def __init__(self, path_to_data, embeddings=True, train=True):
-        super().__init__(path_to_data, embeddings)
-
-        # train_meta, test_meta = utils.data.train_test_split_by_entry_key(
-        #     self.metadata, key='track_id', train_size=0.8, test_size=0.2, seed=42)
-
-        self.splits = mdb.utils.artist_conditional_split(test_size=0.15, num_splits=1, 
-                                                random_state=random_seed)[0]
-
 def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=20):
     # define split
     splits = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
@@ -62,13 +51,6 @@ def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=
             print(f'comparison failed: \n\t {etest} \n\t {e}')
 
     print('done! :)')
-
-def find_missing_classes(a, b):
-    "find out how many classes in a are missing in b"
-    missing_b_classes = []
-    for c in a:
-        if c not in b:
-            missing_b_classes.append(c)
 
 if __name__ == "__main__":
     import argparse

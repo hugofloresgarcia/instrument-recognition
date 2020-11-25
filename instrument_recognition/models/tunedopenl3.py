@@ -24,7 +24,7 @@ class TunedOpenL3(pl.LightningModule):
         # model architecture stuff
         self.filters = Melspectrogram(sr=self.hparams.sr)
         self.openl3 = OpenL3Mel128(
-            weight_file='./weights/openl3/openl3_music_6144_no_mel_layer_pytorch_weights', 
+            weight_file='/home/hugo/lab/mono_music_sed/instrument_recognition/weights/openl3/openl3_music_6144_no_mel_layer_pytorch_weights', 
             input_shape=(1, self.hparams.sr), 
             maxpool_kernel=(16, 24), #512
             # maxpool_kernel=(4, 8), #6144
