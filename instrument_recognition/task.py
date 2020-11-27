@@ -43,7 +43,7 @@ def load_model(hparams, output_units=None):
         from instrument_recognition.models.tunedopenl3 import TunedOpenL3
         model = TunedOpenL3(hparams, output_units)
 
-    elif hparams.model.lower() == 'openlclassifier':
+    elif hparams.model.lower() == 'openlclassifier-512':
         from instrument_recognition.models import openlclassifier
         model = openlclassifier.OpenLClassifier(hparams, output_units)  
     
