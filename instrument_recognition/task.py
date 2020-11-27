@@ -45,6 +45,10 @@ def load_model(hparams, output_units=None):
     elif hparams.model.lower() == 'openlclassifier':
         from instrument_recognition.models import openlclassifier
         model = openlclassifier.OpenLClassifier(hparams, output_units)  
+    
+    elif hparams.model.lower() == 'openlclassifer-6144':
+        from instrument_recognition.models.openlclassifer import OpenLClassifier6144
+        model = OpenLClassifier6144(hparams, output_units)
 
     return model       
 

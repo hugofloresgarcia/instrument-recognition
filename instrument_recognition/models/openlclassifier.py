@@ -19,6 +19,11 @@ class OpenLClassifier(pl.LightningModule):
             nn.Dropout(p=self.hparams.dropout), 
 
             nn.BatchNorm1d(128),
+            nn.Linear(128, 128), 
+            nn.ReLU(), 
+            nn.Dropout(p=self.hparams.dropout), 
+
+            nn.BatchNorm1d(128),
             nn.Linear(128, num_output_units))
         
     def forward(self, x):

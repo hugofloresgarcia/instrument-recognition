@@ -7,7 +7,7 @@ import openl3
 
 import instrument_recognition.utils as utils
 
-from instrument_recognition.datasets.base_dataset import BaseDataset
+from instrument_recognition.datasets.base_dataset import BaseDataset, CollateBatches
 from instrument_recognition.models import torchopenl3
 
 
@@ -29,12 +29,12 @@ def embed_dataset(path_to_data, path_to_output,
 
     # make a dataloader
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, 
-                                         num_workers=num_workers)
+                                         num_workers=num_workers, collate_fn=CollateBatches())
 
     # get the model
     model = load_embedding_model(embedding_model_name)
     model.eval()
-    model.cuda()
+    model.cuda(1)
 
     # import openl3 
     # openl3_model = openl3.models.load_audio_embedding_model("mel128", content_type="music", embedding_size=512)
@@ -43,7 +43,7 @@ def embed_dataset(path_to_data, path_to_output,
     pbar = tqdm.tqdm(loader)
     for batch in pbar:
         # get embedding
-        X = batch['X'].cuda()
+        X = batch['X'].cuda(1)
         with torch.no_grad():
             embedding = model(X)
         # embedding = get_original_openl3_embedding(openl3_model, X)
