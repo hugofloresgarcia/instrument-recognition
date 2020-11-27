@@ -17,6 +17,7 @@ import pytorch_lightning as pl
 from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta_score
 import sklearn
 import matplotlib.pyplot as plt
+import uncertainty_metrics as um
 
 import tensorflow as tf
 import tensorboard as tb
@@ -151,9 +152,10 @@ class InstrumentDetectionTask(pl.LightningModule):
             loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
             y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
 
-        yhat = torch.argmax(F.softmax(yhat, dim=1), dim=1, keepdim=False)
+        probits = F.softmax(yhat, dim=1)
+        yhat = torch.argmax(probits, dim=1, keepdim=False)
 
-        return dict(loss=loss, y=y.detach().cpu(),
+        return dict(loss=loss, y=y.detach().cpu(), probits=probits.detach().cpu(),
                     yhat=yhat.detach().cpu(), X=X.detach().cpu())
 
     def training_step(self, batch, batch_idx):
@@ -252,6 +254,20 @@ class InstrumentDetectionTask(pl.LightningModule):
     #---------- LOGGING -----------
     #-------------------------------
     #-------------------------------
+
+    def log_uncertainty_metrics(self, probits, y, prefix='val'):
+        assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
+        probits = probits.detach().numpy()
+        y = y.detach().numpy()
+
+        ece = um.ece(y, probits, num_bins=15)
+        bs = um.brier_score(y, probits)
+
+        reliability_fig = um.reliability_diagram(y, probits)
+
+        self.logger.experiment.add_scalar(f'ECE/{prefix}', ece, self.global_step)
+        self.logger.experiment.add_scalar(f'Brier Score/{prefix}', bs, self.global_step)
+        self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
 
     def log_sklearn_metrics(self, yhat, y, prefix='val'):
         y = y.detach().cpu().numpy()
@@ -382,6 +398,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         # calculate confusion matrices
         yhat = torch.cat([o['yhat'] for o in outputs]).detach().cpu()
         y = torch.cat([o['y'] for o in outputs]).detach().cpu()
+        probits =  torch.cat([o['probits'] for o in outputs]).detach().cpu()
         
         print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         print(f'set of val truths: {set(y.detach().cpu().numpy())}')
@@ -413,6 +430,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'precision/{prefix}/epoch', precision_score(y, yhat, average='micro'))
         self.log(f'recall/{prefix}/epoch', recall_score(y, yhat, average='micro'))
         self.log(f'fscore/{prefix}/epoch', fbeta_score(y, yhat, average='micro', beta=1))
+
+        self.log_uncertainty_metrics(probits, y, prefix)
+
         self.logger.experiment.add_pr_curve(f'pr_curve/{prefix}', labels=y, predictions=yhat, global_step=self.global_step)
         self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
         self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
