@@ -151,7 +151,6 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
         # if either of these don't exist, create both
         if (not os.path.exists(chunk_metadata_path)) \
             or (not os.path.exists(audio_chunk_path)):
-            print(f'- {start_time} -', end='')
             sf.write(audio_chunk_path, audio_chunk, sr, 'PCM_24')
             utils.data.save_dict_yaml(entry, chunk_metadata_path)
         else:

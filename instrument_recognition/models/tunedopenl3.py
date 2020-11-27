@@ -1,4 +1,3 @@
-import argparse
 
 import numpy as np
 import torch
@@ -55,8 +54,9 @@ class TunedOpenL3(pl.LightningModule):
         return x
 
     @classmethod
-    def add_model_specific_args(cls, parent_parser):
-        parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
+    def add_model_specific_args(cls, parser):
+        # import argparse
+        # parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--sr', default=48000, type=int)
         parser.add_argument('--openl3_freeze', default=False, type=utils.train.str2bool)
         parser.add_argument('--openl3_unfreeze_epoch', default=0, type=int)

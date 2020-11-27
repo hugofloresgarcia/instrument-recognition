@@ -26,8 +26,6 @@ import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 import instrument_recognition.datasets.base_dataset as base_dataset
 
-DEFAULT_CONFIG_PATH = '/home/hugo/lab/mono_music_sed/instrument_recognition/configs/default.yaml'
-
 def load_datamodule(hparams):
 
     datamodule = base_dataset.BaseDataModule(
@@ -80,8 +78,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log_dir = None
         
     @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
+    def add_model_specific_args(parser):
+        # import argparse
+        # parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
         # OPTIMIZERS
         parser.add_argument('--learning_rate',  default=3e-4,   type=float)
 
@@ -383,9 +382,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         print(f'set of val truths: {set(y.detach().cpu().numpy())}')
 
-        for yc in y:
-            if yc not in yhat:
-                print(f'MODEL DIDNT PREDICT {self.classes[yc]}')
+        # for yc in y:
+        #     if yc not in yhat:
+        #         print(f'MODEL DIDNT PREDICT {self.classes[yc]}')
 
         # CONFUSION MATRIX
         conf_matrix = sklearn.metrics.confusion_matrix(
@@ -477,7 +476,8 @@ def train_instrument_detection_task(hparams, model):
         log_gpu_memory=True, 
         gpus=gpus,
         profiler=True, 
-        gradient_clip_val=1)
+        gradient_clip_val=1, 
+        deterministic=True)
 
     if hparams.gpuid is not None:
         hparams.gpus = 1
@@ -496,10 +496,8 @@ def train_instrument_detection_task(hparams, model):
                                 #             f'model_torchscript.pt'))
 
 def get_task_parser():
-    import configargparse
-    parser = configargparse.ArgParser(default_config_files=[DEFAULT_CONFIG_PATH])
-
-    parser.add_argument('-c', '--my-config', required=True, is_config_file=True)
+    import argparse
+    parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 
     # by default, the instrument detection task will train
     # TunedOpenL3 
@@ -528,6 +526,7 @@ def get_task_parser():
     parser.add_argument('--batch_size', default=64, type=int)
     parser.add_argument('--num_workers', default=20, type=int)
     parser.add_argument('--use_embeddings', default=False, type=utils.train.str2bool)
+    parser.add_argument('--class_subset', type=str, nargs='*')
 
     # MODELS
     parser.add_argument('--model', default='tunedopenl3', type=str)

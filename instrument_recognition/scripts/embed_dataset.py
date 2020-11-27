@@ -10,6 +10,7 @@ import instrument_recognition.utils as utils
 from instrument_recognition.datasets.base_dataset import BaseDataset
 from instrument_recognition.models import torchopenl3
 
+
 def get_original_openl3_embedding(model, X):
     e =[]
     for x in X:
@@ -32,8 +33,8 @@ def embed_dataset(path_to_data, path_to_output,
 
     # get the model
     model = load_embedding_model(embedding_model_name)
-    model.freeze()
-    model = model
+    model.eval()
+    model.cuda()
 
     # import openl3 
     # openl3_model = openl3.models.load_audio_embedding_model("mel128", content_type="music", embedding_size=512)
@@ -42,8 +43,9 @@ def embed_dataset(path_to_data, path_to_output,
     pbar = tqdm.tqdm(loader)
     for batch in pbar:
         # get embedding
-        X = batch['X']
-        embedding = model(X)
+        X = batch['X'].cuda()
+        with torch.no_grad():
+            embedding = model(X)
         # embedding = get_original_openl3_embedding(openl3_model, X)
 
         # save embedding in numpy format
@@ -82,9 +84,11 @@ if __name__=="__main__":
     parser.add_argument('--path_to_output', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--num_workers', type=int, default=20)
+    parser.add_argument('--model_name', type=str, default='openl3-128-512')
 
     args = parser.parse_args()
 
     embed_dataset(path_to_data=args.path_to_data, path_to_output=args.path_to_output, 
-                  batch_size=args.batch_size, num_workers=args.num_workers)
+                  batch_size=args.batch_size, num_workers=args.num_workers, 
+                  embedding_model_name=args.model_name)
     

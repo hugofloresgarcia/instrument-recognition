@@ -9,6 +9,7 @@ import pandas as pd
 import torch 
 import torchaudio
 import matplotlib.pyplot as plt
+import plotly.express as px
 import PIL
 
 #---------------------#
@@ -179,6 +180,7 @@ def dim_reduce(emb, labels, n_components=3, method='umap', title=''):
         fig = px.scatter_3d(df, x='x', y='y', z='z',
                         color='instrument',
                         title=title)
+
     else:
         raise ValueError("cant plot more than 3 components")
 

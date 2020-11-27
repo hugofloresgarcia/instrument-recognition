@@ -7,6 +7,8 @@ import medleydb as mdb
 import instrument_recognition.utils as utils
 from instrument_recognition.datasets.base_dataset import BaseDataset, BaseDataModule
 
+unwanted_classes = ['Main System', 'claps', 'fx/processed sound']
+
 def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=20):
     # define split
     splits = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
@@ -34,6 +36,10 @@ def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=
     # delete any entry that isnt in the filtered classes
     train_metadata = [e for e in metadata if e['label'] in filtered_classes]
     test_metadata = [e for e in metadata if e['label'] in filtered_classes]
+
+    # delete any entry that contains unwanted classes
+    train_metadata = [e for e in metadata if e['label'] not in unwanted_classes]
+    test_metadata = [e for e in metadata if e['label'] not in unwanted_classes]
 
     # save new metadata to csv in out output path
     os.makedirs(os.path.join(base_train_path), exist_ok=True)

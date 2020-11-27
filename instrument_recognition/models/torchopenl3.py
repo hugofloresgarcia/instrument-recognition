@@ -24,7 +24,7 @@ def get_model(n_mels=128, embedding_size=512):
 
     conv = OpenL3Mel128(maxpool_kernel=maxpool_kernel)
 
-    model = nn.Sequential(spec, conv)
+    model = nn.Sequential(spec, conv, nn.Flatten())
     return model
     
 class OpenL3Embedding(pl.LightningModule):

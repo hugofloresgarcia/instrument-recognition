@@ -105,8 +105,7 @@ def make_background_soundscapes():
 
     # done collecting! now, do all the hard work
     transform_background_audio(list_of_audio_paths, list_of_output_paths)
-                
-
+    
 if __name__ == "__main__":
     make_soundscapes()          
 
