@@ -50,7 +50,7 @@ def load_model(hparams, output_units=None):
         from instrument_recognition.models.mlp import MLP6144
         model = MLP6144(hparams, output_units)
     else:
-        raise ValueError(f"couldnt find model name: {hparams.model.lower()})
+        raise ValueError(f"couldnt find model name: {hparams.model.lower()}")
 
     return model
 
