@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch
 
 
-class OpenLClassifier(pl.LightningModule):
+class MLP512(pl.LightningModule):
 
     def __init__(self, hparams, num_output_units):
         super().__init__()
@@ -25,7 +25,7 @@ class OpenLClassifier(pl.LightningModule):
         # print(x.shape)
         return self.fc(x)
     
-class OpenLClassifier6144(pl.LightningModule):
+class MLP6144(pl.LightningModule):
 
     def __init__(self, hparams, num_output_units):
         super().__init__()
