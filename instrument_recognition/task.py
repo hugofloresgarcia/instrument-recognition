@@ -17,7 +17,7 @@ import pytorch_lightning as pl
 from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta_score
 import sklearn
 import matplotlib.pyplot as plt
-import uncertainty_metrics as um
+import uncertainty_metrics.numpy as um
 
 import tensorflow as tf
 import tensorboard as tb
@@ -45,7 +45,6 @@ def load_model(hparams, output_units=None):
     elif hparams.model.lower() == 'mlp-512':
         from instrument_recognition.models.mlp import MLP512
         model = MLP512(hparams, output_units)  
-    
     elif hparams.model.lower() == 'mlp-6144':
         from instrument_recognition.models.mlp import MLP6144
         model = MLP6144(hparams, output_units)
@@ -258,17 +257,36 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def log_uncertainty_metrics(self, probits, y, prefix='val'):
         assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
+        # convert to numpy
         probits = probits.detach().numpy()
-        y = y.detach().numpy()
+        y = y.detach().numpy().astype(np.int)
 
-        ece = um.ece(y, probits, num_bins=15)
-        bs = um.brier_score(y, probits)
+        # print(len(y))
 
-        reliability_fig = um.reliability_diagram(y, probits)
+        # # restrict the amount of samples
 
+        #     print(y.shape)
+        #     print(y)
+        #     exit()
+
+        # compute metrics
+        ece = um.ece(y, probits, num_bins=30)
         self.logger.experiment.add_scalar(f'ECE/{prefix}', ece, self.global_step)
-        self.logger.experiment.add_scalar(f'Brier Score/{prefix}', bs, self.global_step)
-        self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
+
+        # bs = um.brier_score(y, probits)
+        # self.logger.experiment.add_scalar(f'Brier Score/{prefix}', bs, self.global_step)
+        
+
+        # if prefix == 'test':
+        #     print('computing reliability')
+        #     max_sample_size = 10000
+        #     if len(y) > max_sample_size:
+        #         indices = np.random.choice(np.arange(len(y)), max_sample_size)
+        #         y = np.take(y, indices, axis=0)
+        #         probits = np.take(y, indices, axis=0)
+        #     reliability_fig = um.reliability_diagram(probits, y)
+        #     self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
+        #     print('done :)')
 
     def log_sklearn_metrics(self, yhat, y, prefix='val'):
         y = y.detach().cpu().numpy()
@@ -491,7 +509,8 @@ def train_instrument_detection_task(hparams, model):
     trainer = pl.Trainer.from_argparse_args(
         args=hparams,
         default_root_dir=os.path.join(os.getcwd(), 'checkpoints'),
-        log_every_n_steps=25,
+        log_every_n_steps=100,
+        max_epochs=hparams.max_epochs,
         callbacks=callbacks,
         checkpoint_callback=checkpoint_callback, 
         logger=logger,
@@ -502,7 +521,9 @@ def train_instrument_detection_task(hparams, model):
         gpus=gpus,
         profiler=True, 
         gradient_clip_val=1, 
-        deterministic=True)
+        deterministic=True,
+        num_sanity_val_steps=0)
+    
 
     if hparams.gpuid is not None:
         hparams.gpus = 1
@@ -536,7 +557,6 @@ def get_task_parser():
     parser = pl.Trainer.add_argparse_args(parser)
 
     # GENERAL
-    parser.add_argument('--num_epochs',     default=150,    type=int)
     parser.add_argument('--name',           default='tunedl3-exp', type=str)
     parser.add_argument('--random_seed',    default=42,    type=int)
     parser.add_argument('--verbose',        default=True,  type=utils.train.str2bool)

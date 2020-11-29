@@ -10,6 +10,8 @@ import instrument_recognition.utils as utils
 from instrument_recognition.datasets.base_dataset import BaseDataset, CollateBatches
 from instrument_recognition.models import torchopenl3
 
+from instrument_recognition.scripts.split_mdb import unwanted_classes
+
 
 def get_original_openl3_embedding(model, X):
     e =[]
@@ -23,9 +25,10 @@ def get_original_openl3_embedding(model, X):
 
 def embed_dataset(path_to_data, path_to_output, 
                  embedding_model_name='openl3-128-512', 
-                 batch_size=64, num_workers=18):
+                 batch_size=64, num_workers=18, gpuid=0, 
+                 use_augmented=True):
     # load our dataset
-    dataset = BaseDataset(path_to_data, use_embeddings=False)
+    dataset = BaseDataset(path_to_data, use_embeddings=False, use_augmented=use_augmented, unwanted_classes=unwanted_classes)
 
     # make a dataloader
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, 
@@ -34,7 +37,7 @@ def embed_dataset(path_to_data, path_to_output,
     # get the model
     model = load_embedding_model(embedding_model_name)
     model.eval()
-    model.cuda(1)
+    model.cuda(gpuid)
 
     # import openl3 
     # openl3_model = openl3.models.load_audio_embedding_model("mel128", content_type="music", embedding_size=512)
@@ -43,7 +46,7 @@ def embed_dataset(path_to_data, path_to_output,
     pbar = tqdm.tqdm(loader)
     for batch in pbar:
         # get embedding
-        X = batch['X'].cuda(1)
+        X = batch['X'].cuda(gpuid)
         with torch.no_grad():
             embedding = model(X)
         # embedding = get_original_openl3_embedding(openl3_model, X)
@@ -52,12 +55,19 @@ def embed_dataset(path_to_data, path_to_output,
         for i, metadata_index in enumerate(batch['metadata_index']):
             entry = dict(dataset.metadata[metadata_index])
 
+            if entry['label'] in unwanted_classes:
+                continue
+
             # get the path to audio and make an embedding path from it 
-            path_to_embedding = entry['path_to_audio'].replace(path_to_data, path_to_output+'/')
-            assert 'wav' in entry['path_to_audio']
+            audio_path_key = 'path_to_audio-augmented' if entry['is_augmented'] else 'path_to_audio'
+            path_to_embedding = entry[audio_path_key].replace(path_to_data, path_to_output+'/')
+            assert 'wav' in entry[audio_path_key]
             path_to_embedding = path_to_embedding.replace('.wav', '.npy')
             os.makedirs(os.path.dirname(path_to_embedding), exist_ok=True)
-            entry['path_to_embedding'] = path_to_embedding
+            
+            embedding_path_key = 'path_to_embedding-augmented' if entry['is_augmented'] else 'path_to_emnbedding'
+            entry[embedding_path_key] = path_to_embedding
+            print(f'saving {embedding_path_key}')
 
             emb_out = embedding[i].detach().cpu().numpy()
             assert emb_out.ndim == 1
@@ -85,10 +95,12 @@ if __name__=="__main__":
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--num_workers', type=int, default=20)
     parser.add_argument('--model_name', type=str, default='openl3-128-512')
+    parser.add_argument('--gpuid', type=int, default=0)
+    parser.add_argument('--use_augmented', type=bool, default=False)
 
     args = parser.parse_args()
 
     embed_dataset(path_to_data=args.path_to_data, path_to_output=args.path_to_output, 
                   batch_size=args.batch_size, num_workers=args.num_workers, 
-                  embedding_model_name=args.model_name)
+                  embedding_model_name=args.model_name, gpuid=args.gpuid)
     

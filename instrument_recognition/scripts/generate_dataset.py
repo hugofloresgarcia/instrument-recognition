@@ -9,6 +9,7 @@ import soundfile as sf
 import pandas as pd
 import medleydb as mdb
 import threading
+import concurrent
 
 import instrument_recognition.utils as utils 
 
@@ -112,10 +113,10 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
 
     metadata = []
 
-    print(f'augment set to {augment}')
+    start_times = np.arange(0, n_chunks, hop_size)
+    max_workers = 50
 
-    # iterate through chunks
-    for start_time in np.arange(0, n_chunks, hop_size):
+    def save_chunk(start_time):
         # round start time bc of floating pt errors
         start_time = np.around(start_time, 4)
 
@@ -128,7 +129,9 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
                                         audio_chunk_name)
         
         if augment:
-            audio_chunk, effect_params = augment_from_array_to_array(audio_chunk, sr)
+            aug_chunk, effect_params = augment_from_array_to_array(audio_chunk, sr)
+            aug_chunk_name = base_chunk_name + f'/{start_time}-AUGMENTED.wav'
+            aug_chunk_path = audio_chunk_path.replace(audio_chunk_name, aug_chunk_name)
         else:
             effect_params = []
 
@@ -141,25 +144,34 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
         entry = dict()
         entry.update(metadata_extras)
         entry.update(dict(
+            path_to_dataset=path_to_output,
+            path_to_metadata=chunk_metadata_path, 
             path_to_audio=audio_chunk_path,
             label=label,
             chunk_size=chunk_size, 
             start_time=float(start_time), 
             sr=sr, 
             effect_params=effect_params))
+        
+        if augment:
+            entry['path_to_audio-augmented'] = aug_chunk_path
 
         # if either of these don't exist, create both
         if (not os.path.exists(chunk_metadata_path)) \
             or (not os.path.exists(audio_chunk_path)):
+            print(f'\t saving {chunk_metadata_path}')
+            if augment:
+                sf.write(aug_chunk_path, aug_chunk, sr, 'PCM_24')
+
             sf.write(audio_chunk_path, audio_chunk, sr, 'PCM_24')
             utils.data.save_dict_yaml(entry, chunk_metadata_path)
         else:
             pass
             # print(f'already found: {audio_chunk_path} and {chunk_metadata_path}')
+        return entry
 
-        metadata.append(entry)
-    
-    return metadata
+    with concurrent.futures.ThreadPoolExecutor(max_workers) as p:
+        p.map(save_chunk, start_times)
 
 # args = path_to_output, mtrack, chunk_size, sr, hop_size
 def _process_mdb_track(args):
@@ -180,7 +192,6 @@ def _process_mdb_track(args):
 
         try:
             audio = load_audio_file(path_to_audio, sr)
-
             # remove silent regions
             audio = trim_silence(audio, sr, min_silence_duration=0.3)
 
@@ -189,6 +200,7 @@ def _process_mdb_track(args):
                         stem_idx=stem.stem_idx,
                         instrument_list=stem.instrument, 
                         artist_id=mtrack.track_id.split('_')[0])
+
 
             # chunk up the audio and save it
             save_windowed_audio_events(
@@ -219,17 +231,18 @@ def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0,
 
     # run as a single process if num workers is less than 1
     if num_workers == 0:
-        for arg in args:
+        pbar = tqdm.tqdm(args)
+        for arg in pbar:
             _process_mdb_track(arg)
     else:
         num_workers = None if num_workers < 0 else num_workers 
         pool = Pool(num_workers)
 
         # do the thing!
-        pool.map(_process_mdb_track, args)
-        # tqdm.contrib.concurrent.process_map(_process_mdb_track, args)
-        pool.close()
-        pool.join()
+        # pool.map(_process_mdb_track, args)
+        tqdm.contrib.concurrent.process_map(_process_mdb_track, args)
+        # pool.close()
+        # pool.join()
     
 def fix_metadata_and_save_separate_dicts(metadata):
     pbar = tqdm.tqdm(metadata)
