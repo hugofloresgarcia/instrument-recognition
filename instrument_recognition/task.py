@@ -27,44 +27,83 @@ import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 import instrument_recognition.datasets.base_dataset as base_dataset
 
-def load_datamodule(hparams):
+def load_datamodule(path_to_data, batch_size, num_workers, use_embeddings):
 
     datamodule = base_dataset.BaseDataModule(
-        path_to_data=hparams.path_to_data,
-        batch_size=hparams.batch_size, 
-        num_workers=hparams.num_workers,
-        use_embeddings=hparams.use_embeddings)
+        path_to_data=path_to_data,
+        batch_size=batch_size, 
+        num_workers=num_workers,
+        use_embeddings=use_embeddings)
     datamodule.setup()
     
     return datamodule
 
-def load_model(hparams, output_units=None):
-    if hparams.model.lower() == 'tunedopenl3':
+def load_model(model_name, output_units=None, dropout=0.5):
+    """ loads an instrument detection model
+    options: tunedopenl3, openl3mlp6144-finetuned, openl3mlp-512,
+             openl3mlp-6144, mlp-512, mlp-6144
+    """
+    if model_name == 'tunedopenl3':
         from instrument_recognition.models.tunedopenl3 import TunedOpenL3
-        model = TunedOpenL3(hparams, output_units)
-    elif hparams.model.lower() == 'mlp-512':
-        from instrument_recognition.models.mlp import MLP512
-        model = MLP512(hparams, output_units)  
-    elif hparams.model.lower() == 'mlp-6144':
+        model = TunedOpenL3(output_units, dropout, sr=48000, use_kapre=False)
+
+    elif model_name == 'openl3mlp6144-finetuned':
+        from instrument_recognition.models.torchopenl3 import OpenL3Embedding
         from instrument_recognition.models.mlp import MLP6144
-        model = MLP6144(hparams, output_units)
+        model = nn.Sequential(OrderedDict([
+            ('openl3', OpenL3Embedding(128, 6144)),
+            ('mlp', MLP6144(0.5, 39)), 
+        ]))
+        mlp_state_d  = torch.load('/home/hugo/lab/mono_music_sed/instrument_recognition/weights/mlp-6144-mixup')
+        print('LOADING MLP STATE DICT')
+        print(mlp_state_d.keys())
+        model.mlp.load_state_dict(mlp_state_d)
+        
+    elif model_name == 'openl3mlp-512':
+        from instrument_recognition.models.tunedopenl3 import OpenL3MLP
+        model = OpenL3MLP(embedding_size=512, 
+                          dropout=dropout,
+                          num_output_units=output_units)
+
+    elif model_name == 'openl3mlp-6144':
+        from instrument_recognition.models.tunedopenl3 import OpenL3MLP
+        model = OpenL3MLP(embedding_size=6144, 
+                          dropout=dropout,
+                          num_output_units=output_units)
+
+    elif model_name == 'mlp-512':
+        from instrument_recognition.models.mlp import MLP512
+        model = MLP512(dropout, output_units)  
+
+    elif model_name == 'mlp-6144':
+        from instrument_recognition.models.mlp import MLP6144
+        model = MLP6144(dropout, output_units)
+
     else:
-        raise ValueError(f"couldnt find model name: {hparams.model.lower()}")
+        raise ValueError(f"couldnt find model name: {model_name}")
 
     return model
 
 class InstrumentDetectionTask(pl.LightningModule):
 
-    def __init__(self, hparams, model, datamodule):
+    def __init__(self, model, datamodule, 
+                 learning_rate=0.0003,
+                 weighted_cross_entropy=True, 
+                 mixup=False, mixup_alpha=0.2,
+                 log_epoch_metrics=True 
+                 ):
         super().__init__()
-        self.hparams = hparams
+        self.weighted_cross_entropy = weighted_cross_entropy
+        self.mixup = mixup
+        self.learning_rate = learning_rate
+        self.log_epoch_metrics = log_epoch_metrics
 
         # datamodules
         self.datamodule = datamodule
         self.classes = self.datamodule.dataset.classes
 
         # do weighted cross entropy? 
-        if self.hparams.weighted_cross_entropy:
+        if self.weighted_cross_entropy:
             assert hasattr(self.datamodule.dataset, 'class_weights'), 'dataset is missing self.class_weights'
             self.class_weights = nn.Parameter(
                 torch.from_numpy(self.datamodule.dataset.class_weights).float())
@@ -79,31 +118,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         # self.fwd_hooks = OrderedDict()
         # self.register_all_hooks()
 
-        #  logging
-        self.log_dir = None
-        
-    @staticmethod
-    def add_model_specific_args(parser):
-        # import argparse
-        # parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
-        # OPTIMIZERS
-        parser.add_argument('--learning_rate',  default=3e-4,   type=float)
-
-        # LOGGING
-        parser.add_argument('--log_epoch_metrics', default=True, type=utils.train.str2bool)
-        parser.add_argument('--log_train_epoch_metrics', default=False, type=utils.train.str2bool)
-
-        # MODELS
-        parser.add_argument('--dropout',        default=0.5,    type=float) #0.5 dropout is gut
-        parser.add_argument('--mixup',          default=False,   type=utils.train.str2bool)
-        parser.add_argument('--mixup_alpha',        default=0.2,    type=float)
-        parser.add_argument('--weighted_cross_entropy',     default=True, type=utils.train.str2bool)
-
-        # AUDIO
-        parser.add_argument('--sample_rate',     default=48000, type=int)
-        # parser.add_argument('--online_transforms', default=False, type=utils.train.str2bool)
-
-        return parser
 
     def forward(self, x):
         return self.model(x)
@@ -138,7 +152,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         return batch
 
     def _main_step(self, batch, batch_idx, train=False):
-        if not (self.hparams.mixup and train):
+        if not (self.mixup and train):
             batch = self.preprocess(batch, train=train)
             X, y = batch['X'], batch['y']
             # forward pass through model
@@ -146,7 +160,7 @@ class InstrumentDetectionTask(pl.LightningModule):
             loss = self.criterion(yhat, y)
         else:
             batch = self.preprocess(batch, train=train)
-            X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.hparams.mixup_alpha)
+            X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.mixup_alpha)
             # forward pass through model
             yhat = self.model(X)
             loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
@@ -168,10 +182,10 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # train logging
         self.log('loss/train', result['loss'], on_step=True)
+        self.log('loss/train-epoch', result['loss'], on_step=False, on_epoch=True)
 
         # pick and log sample audio
         if batch_idx % 250 == 0:
-            print(f'LOGGING RANDOM EXAMPLE')
             self.log_random_sample(batch, title='train-sample')
             # print(f'done:)')
         
@@ -197,8 +211,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log('loss/val', result['loss'], logger=True, prog_bar=True)
         self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='val')
-        # if self.hparams.use_embeddings:
-        #     self.log_embedding( batch['X'], batch['y'], batch['path_to_audio'],'embeddings/val')
 
         return result
 
@@ -227,33 +239,33 @@ class InstrumentDetectionTask(pl.LightningModule):
         optimizer = torch.optim.Adam(
             # add this lambda so it doesn't crash if part of the model is frozen
             filter(lambda p: p.requires_grad, self.parameters()),
-            lr=self.hparams.learning_rate, 
+            lr=self.learning_rate, 
             weight_decay=1e-5)
         scheduler = {
             'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min'), 
-            'monitor': 'loss/train'
+            'monitor': 'loss/train-epoch'
         }
         return [optimizer], [scheduler]
 
     # EPOCH ENDS
     def train_epoch_end(self, outputs):
-        if self.hparams.log_train_epoch_metrics:
+        if self.log_epoch_metrics:
             outputs = self._log_epoch_metrics(outputs, prefix='train')
         return outputs
 
     def validation_epoch_end(self, outputs):
-        if self.hparams.log_epoch_metrics:
+        if self.log_epoch_metrics:
             outputs = self._log_epoch_metrics(outputs, prefix='val')
 
     def test_epoch_end(self, outputs):
-        if self.hparams.log_epoch_metrics:
+        if self.log_epoch_metrics:
             outputs = self._log_epoch_metrics(outputs, prefix='test')
 
     #-------------------------------
     #-------------------------------
     #---------- LOGGING -----------
     #-------------------------------
-    #-------------------------------
+    #-------------------`------------
 
     def log_uncertainty_metrics(self, probits, y, prefix='val'):
         assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
@@ -419,8 +431,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         y = torch.cat([o['y'] for o in outputs]).detach().cpu()
         probits =  torch.cat([o['probits'] for o in outputs]).detach().cpu()
         
-        print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
-        print(f'set of val truths: {set(y.detach().cpu().numpy())}')
+        # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
+        # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
 
         # for yc in y:
         #     if yc not in yhat:
@@ -458,32 +470,33 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         return outputs
 
-def train_instrument_detection_task(hparams, model):
+def train_instrument_detection_model(model, 
+                                    name: str,
+                                    version: int,
+                                    gpuid: int,
+                                    max_epochs: int = 100,
+                                    random_seed: int = 20):
     from test_tube import Experiment
     
     # seed everything!!!
-    pl.seed_everything(hparams.random_seed)
+    pl.seed_everything(random_seed)
 
-    # set the gpu hparam (important for some models)
-    hparams.gpus = hparams.gpus or 0
 
         # set up logger
     logger = pl.loggers.TestTubeLogger(
         save_dir='./test-tubes',
-        name=hparams.name, 
-        version=hparams.version, 
+        name=name, 
+        version=version, 
         create_git_tag=True)
 
-    if hparams.version is None:
-        hparams.version = logger.version
+    if version is None:
+        version = logger.version
 
     # set up logging and checkpoint dirs
-    log_dir = os.path.join(os.getcwd(), 'test-tubes', hparams.name, f'version_{logger.version}')
+    log_dir = os.path.join(os.getcwd(), 'test-tubes', name, f'version_{version}')
     checkpoint_dir = os.path.join(log_dir, 'checkpoints')
     best_ckpt = utils.train.get_best_ckpt_path(checkpoint_dir)
     
-    # add log_dir to hparams for 
-    model.log_dir = log_dir
 
     # set up checkpoint callbacks
     checkpoint_callback = pl.callbacks.ModelCheckpoint(
@@ -497,20 +510,18 @@ def train_instrument_detection_task(hparams, model):
     else:
         callbacks = []
 
-    if hparams.gpuid is not None:
-        if hparams.gpuid == -1:
+    if gpuid is not None:
+        if gpuid == -1:
             gpus = -1
         else:
-            gpus = [hparams.gpuid]
+            gpus = [gpuid]
     else:
         gpus = None
 
     # hardcode some 
-    trainer = pl.Trainer.from_argparse_args(
-        args=hparams,
-        default_root_dir=os.path.join(os.getcwd(), 'checkpoints'),
+    trainer = pl.Trainer(
         log_every_n_steps=100,
-        max_epochs=hparams.max_epochs,
+        max_epochs=max_epochs,
         callbacks=callbacks,
         checkpoint_callback=checkpoint_callback, 
         logger=logger,
@@ -519,80 +530,14 @@ def train_instrument_detection_task(hparams, model):
         weights_summary='full', 
         log_gpu_memory=True, 
         gpus=gpus,
-        profiler=True, 
+        profiler=True,
+        # profiler=pl.profiler.SimpleProfiler(
+        #             output_filename=os.path.join(log_dir, 'profiler-report.txt')), 
         gradient_clip_val=1, 
         deterministic=True,
         num_sanity_val_steps=0)
-    
 
-    if hparams.gpuid is not None:
-        hparams.gpus = 1
-    else:
-        hparams.gpus = 0
-
-    if not hparams.export:
-        trainer.fit(model)
-        trainer.test()
-    
-    if hparams.export:
-        # model.model.freeze()
-        trainer.test(model)
-        utils.train.save_torchscript_model(model.model, 'model.pt')
-                                # os.path.join(model.log_dir, 
-                                #             f'model_torchscript.pt'))
-
-def get_task_parser():
-    import argparse
-    parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
-
-    # by default, the instrument detection task will train
-    # TunedOpenL3 
-    from instrument_recognition.models.tunedopenl3 import TunedOpenL3
-    parser = TunedOpenL3.add_model_specific_args(parser)
-
-    # ------------------
-    # | HYPERPARAMETERS |
-    # ------------------
-    parser = InstrumentDetectionTask.add_model_specific_args(parser)
-    parser = pl.Trainer.add_argparse_args(parser)
-
-    # GENERAL
-    parser.add_argument('--name',           default='tunedl3-exp', type=str)
-    parser.add_argument('--random_seed',    default=42,    type=int)
-    parser.add_argument('--verbose',        default=True,  type=utils.train.str2bool)
-    parser.add_argument('--version',        default=None,  type=utils.train.noneint)
-    parser.add_argument('--export',         default=False, type=utils.train.str2bool)
-
-    # TRAINER
-    parser.add_argument('--gpuid',          default=0, type=utils.train.noneint)
-
-    # DATASETS
-    parser.add_argument('--path_to_data',    default='philharmonia', type=str)
-    parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--num_workers', default=20, type=int)
-    parser.add_argument('--use_embeddings', default=False, type=utils.train.str2bool)
-    parser.add_argument('--class_subset', type=str, nargs='*')
-
-    # MODELS
-    parser.add_argument('--model', default='tunedopenl3', type=str)
-
-    return parser
-
-if __name__ == "__main__":
-    parser = get_task_parser()
-
-    # parse args
-    hparams = parser.parse_args()
-
-    # load datamodule
-    datamodule = load_datamodule(hparams)
-    print('done w datamodule')
-
-    # load model
-    model = load_model(hparams, output_units=len(datamodule.get_classes()))
-
-    # load task
-    task =  InstrumentDetectionTask(hparams, model, datamodule)
-
-    # run task
-    train_instrument_detection_task(hparams, task)
+    # train, then test
+    trainer.fit(model)
+    test_log = trainer.test()
+    return test_log

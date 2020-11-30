@@ -7,7 +7,8 @@ import medleydb as mdb
 import instrument_recognition.utils as utils
 from instrument_recognition.datasets.base_dataset import BaseDataset, BaseDataModule
 
-unwanted_classes = ['Main System', 'claps', 'fx/processed sound']
+unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal', 'glockenspiel', 'tambourine', 'timpani', 'snare drum', 
+                    'clarinet section', 'flute  section', 'tenor saxophone', 'trumpet section']
 
 def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=20):
     # define split
@@ -34,12 +35,12 @@ def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=
     print(filtered_classes)
 
     # delete any entry that isnt in the filtered classes
-    train_metadata = [e for e in metadata if e['label'] in filtered_classes]
-    test_metadata = [e for e in metadata if e['label'] in filtered_classes]
+    train_metadata = [e for e in train_metadata if e['label'] in filtered_classes]
+    test_metadata = [e for e in test_metadata if e['label'] in filtered_classes]
 
     # delete any entry that contains unwanted classes
-    train_metadata = [e for e in metadata if e['label'] not in unwanted_classes]
-    test_metadata = [e for e in metadata if e['label'] not in unwanted_classes]
+    train_metadata = [e for e in train_metadata if e['label'] not in unwanted_classes]
+    test_metadata = [e for e in test_metadata if e['label'] not in unwanted_classes]
 
     # save new metadata to csv in out output path
     os.makedirs(os.path.join(base_train_path), exist_ok=True)
@@ -50,7 +51,7 @@ def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=
     # checking to see if this actually works
     t = utils.data.load_metadata_csv(os.path.join(base_train_path, 'metadata.csv'))
     for etest, e in zip(t, train_metadata):
-        print('making sure everythings ok')
+        # print('making sure everythings ok')
         try:
             assert etest == e
         except AssertionError:
