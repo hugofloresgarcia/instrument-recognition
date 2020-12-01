@@ -46,6 +46,16 @@ def load_model(model_name, output_units=None, dropout=0.5):
     if model_name == 'tunedopenl3':
         from instrument_recognition.models.tunedopenl3 import TunedOpenL3
         model = TunedOpenL3(output_units, dropout, sr=48000, use_kapre=False)
+    
+    elif model_name == 'baseline-512':
+        from instrument_recognition.models.tunedopenl3 import OpenL3MLP
+        model = OpenL3MLP(embedding_size=512, dropout=dropout, num_output_units=output_units, 
+                          sr=48000, pretrained=False)
+
+    elif model_name == 'baseline-6144':
+        from instrument_recognition.models.tunedopenl3 import OpenL3MLP
+        model = OpenL3MLP(embedding_size=6144, dropout=dropout, num_output_units=output_units, 
+                          sr=48000, pretrained=False)
 
     elif model_name == 'openl3mlp6144-finetuned':
         from instrument_recognition.models.torchopenl3 import OpenL3Embedding
@@ -95,6 +105,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         super().__init__()
         self.weighted_cross_entropy = weighted_cross_entropy
         self.mixup = mixup
+        self.mixup_alpha = mixup_alpha
         self.learning_rate = learning_rate
         self.log_epoch_metrics = log_epoch_metrics
 
@@ -118,6 +129,11 @@ class InstrumentDetectionTask(pl.LightningModule):
         # self.fwd_hooks = OrderedDict()
         # self.register_all_hooks()
 
+    def batch_detach(self, batch):
+        for i, item in enumerate(batch):
+            if isinstance( item, torch.Tensor):
+                batch[i] = item.detach().cpu()
+        return batch
 
     def forward(self, x):
         return self.model(x)
@@ -169,8 +185,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         probits = F.softmax(yhat, dim=1)
         yhat = torch.argmax(probits, dim=1, keepdim=False)
 
-        return dict(loss=loss, y=y.detach().cpu(), probits=probits.detach().cpu(),
-                    yhat=yhat.detach().cpu(), X=X.detach().cpu())
+        return dict(loss=loss, y=y.detach(), probits=probits.detach(),
+                    yhat=yhat.detach(), X=X.detach())
 
     def training_step(self, batch, batch_idx):
 
@@ -181,8 +197,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         batch.update(result)
 
         # train logging
-        self.log('loss/train', result['loss'], on_step=True)
-        self.log('loss/train-epoch', result['loss'], on_step=False, on_epoch=True)
+        self.log('loss/train', result['loss'].detach().cpu(), on_step=True)
+        self.log('loss/train-epoch', result['loss'].detach().cpu(), on_step=False, on_epoch=True)
 
         # pick and log sample audio
         if batch_idx % 250 == 0:
@@ -208,10 +224,11 @@ class InstrumentDetectionTask(pl.LightningModule):
             self.log_random_sample(batch, title='val-sample')
 
         # metric logging
-        self.log('loss/val', result['loss'], logger=True, prog_bar=True)
-        self.log('loss_val', result['loss'], on_step=False, on_epoch=True, prog_bar=True)
+        self.log('loss/val', result['loss'].detach().cpu(), logger=True, prog_bar=True)
+        self.log('loss_val', result['loss'].detach().cpu(), on_step=False, on_epoch=True, prog_bar=True)
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='val')
 
+        # result['loss'] = result['loss'].detach().cpu()
         return result
 
     def test_step(self, batch, batch_idx):
@@ -229,7 +246,7 @@ class InstrumentDetectionTask(pl.LightningModule):
             self.log_random_sample(batch, title='test-sample')
 
         # metric logging
-        self.log('loss/test', result['loss'], logger=True)     
+        self.log('loss/test', result['loss'].detach().cpu(), logger=True)     
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='test')
 
         return result
@@ -283,7 +300,8 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # compute metrics
         ece = um.ece(y, probits, num_bins=30)
-        self.logger.experiment.add_scalar(f'ECE/{prefix}', ece, self.global_step)
+        # self.logger.experiment.add_scalar(f'ECE/{prefix}', ece, self.global_step)
+        self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
         # bs = um.brier_score(y, probits)
         # self.logger.experiment.add_scalar(f'Brier Score/{prefix}', bs, self.global_step)
@@ -315,6 +333,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.logger.experiment.add_embedding(embedding_batch,tag=title,  metadata=metadata, global_step=self.global_step)
 
     def log_random_sample(self, batch, title='sample'):
+        batch = self.batch_detach(batch)
         idx = np.random.randint(0, len(batch['X']))
         pred = self.classes[batch['yhat'][idx]]
         truth = self.classes[batch['y'][idx]]
@@ -430,6 +449,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         yhat = torch.cat([o['yhat'] for o in outputs]).detach().cpu()
         y = torch.cat([o['y'] for o in outputs]).detach().cpu()
         probits =  torch.cat([o['probits'] for o in outputs]).detach().cpu()
+        loss = torch.cat([o['loss'] for o in outputs]).detach().cpu()
         
         # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
@@ -468,23 +488,26 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
         self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
 
-        return outputs
+        return self.batch_detach(outputs)
 
 def train_instrument_detection_model(model, 
                                     name: str,
                                     version: int,
                                     gpuid: int,
+                                    log_dir: str = './test-tubes',
                                     max_epochs: int = 100,
-                                    random_seed: int = 20):
+                                    random_seed: int = 20, 
+                                    **trainer_kwargs):
     from test_tube import Experiment
     
     # seed everything!!!
     pl.seed_everything(random_seed)
 
 
-        # set up logger
-    logger = pl.loggers.TestTubeLogger(
-        save_dir='./test-tubes',
+    # set up logger
+    from pytorch_lightning.loggers import TestTubeLogger
+    logger = TestTubeLogger(
+        save_dir=log_dir,
         name=name, 
         version=version, 
         create_git_tag=True)
@@ -493,13 +516,15 @@ def train_instrument_detection_model(model,
         version = logger.version
 
     # set up logging and checkpoint dirs
-    log_dir = os.path.join(os.getcwd(), 'test-tubes', name, f'version_{version}')
+    log_dir = os.path.join(log_dir, name, f'version_{version}')
+    # os.makedirs(log_dir, exist_ok=False)
     checkpoint_dir = os.path.join(log_dir, 'checkpoints')
     best_ckpt = utils.train.get_best_ckpt_path(checkpoint_dir)
     
 
     # set up checkpoint callbacks
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(
+    from pytorch_lightning.callbacks import ModelCheckpoint
+    checkpoint_callback = ModelCheckpoint(
         filepath=checkpoint_dir + '/{epoch:02d}-{loss_val:.2f}', 
         monitor='loss/val', 
         verbose=True, 
@@ -519,7 +544,10 @@ def train_instrument_detection_model(model,
         gpus = None
 
     # hardcode some 
-    trainer = pl.Trainer(
+    from pytorch_lightning import  Trainer
+    trainer = Trainer(
+        accelerator='dp',
+        # distributed_backend='dp',
         log_every_n_steps=100,
         max_epochs=max_epochs,
         callbacks=callbacks,
@@ -535,7 +563,8 @@ def train_instrument_detection_model(model,
         #             output_filename=os.path.join(log_dir, 'profiler-report.txt')), 
         gradient_clip_val=1, 
         deterministic=True,
-        num_sanity_val_steps=0)
+        num_sanity_val_steps=0, 
+        **trainer_kwargs)
 
     # train, then test
     trainer.fit(model)

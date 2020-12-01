@@ -29,7 +29,7 @@ def get_model(n_mels=128, embedding_size=512):
     
 class OpenL3Embedding(pl.LightningModule):
 
-    def __init__(self, n_mels, embedding_size):
+    def __init__(self, n_mels, embedding_size, pretrained=True):
         super().__init__()
         assert isinstance(n_mels, int)
         assert isinstance(embedding_size, int)
@@ -46,7 +46,7 @@ class OpenL3Embedding(pl.LightningModule):
                                       fmin=0.0, fmax=None, power_melgram=1.0, 
                                       return_decibel_melgram=True, trainable_fb=False, 
                                       htk=True)
-        self.openl3 = OpenL3Mel128(maxpool_kernel=maxpool_kernel, use_kapre=False)
+        self.openl3 = OpenL3Mel128(maxpool_kernel=maxpool_kernel, use_kapre=False, pretrained=pretrained)
         self.flatten = nn.Flatten()
     
     def forward(self, x):
@@ -87,8 +87,11 @@ class OpenL3Mel128(pl.LightningModule):
                 input_shape=(1, 48000), 
                 maxpool_kernel=(16, 24), 
                 maxpool_stride=(4, 8), 
-                use_kapre=False):
+                use_kapre=False, 
+                pretrained=True):
         super(OpenL3Mel128, self).__init__()
+
+        self.pretrained = pretrained
 
         self._weights_dict = load_weights(weight_file)
 
@@ -178,9 +181,10 @@ class OpenL3Mel128(pl.LightningModule):
         elif dim == 3:  layer = nn.Conv3d(**kwargs)
         else:           raise NotImplementedError()
 
-        layer.state_dict()['weight'].copy_(torch.from_numpy(self._weights_dict[name]['weights']))
-        if 'bias' in self._weights_dict[name]:
-            layer.state_dict()['bias'].copy_(torch.from_numpy(self._weights_dict[name]['bias']))
+        if self.pretrained:
+            layer.state_dict()['weight'].copy_(torch.from_numpy(self._weights_dict[name]['weights']))
+            if 'bias' in self._weights_dict[name]:
+                layer.state_dict()['bias'].copy_(torch.from_numpy(self._weights_dict[name]['bias']))
         return layer
 
     def __batch_normalization(self, dim, name, **kwargs):
@@ -189,16 +193,17 @@ class OpenL3Mel128(pl.LightningModule):
         elif dim == 3:  layer = nn.BatchNorm3d(**kwargs)
         else:           raise NotImplementedError()
 
-        if 'scale' in self._weights_dict[name]:
-            layer.state_dict()['weight'].copy_(torch.from_numpy(self._weights_dict[name]['scale']))
-        else:
-            layer.weight.data.fill_(1)
+        if self.pretrained:
+            if 'scale' in self._weights_dict[name]:
+                layer.state_dict()['weight'].copy_(torch.from_numpy(self._weights_dict[name]['scale']))
+            else:
+                layer.weight.data.fill_(1)
 
-        if 'bias' in self._weights_dict[name]:
-            layer.state_dict()['bias'].copy_(torch.from_numpy(self._weights_dict[name]['bias']))
-        else:
-            layer.bias.data.fill_(0)
+            if 'bias' in self._weights_dict[name]:
+                layer.state_dict()['bias'].copy_(torch.from_numpy(self._weights_dict[name]['bias']))
+            else:
+                layer.bias.data.fill_(0)
 
-        layer.state_dict()['running_mean'].copy_(torch.from_numpy(self._weights_dict[name]['mean']))
-        layer.state_dict()['running_var'].copy_(torch.from_numpy(self._weights_dict[name]['var']))
+            layer.state_dict()['running_mean'].copy_(torch.from_numpy(self._weights_dict[name]['mean']))
+            layer.state_dict()['running_var'].copy_(torch.from_numpy(self._weights_dict[name]['var']))
         return layer
