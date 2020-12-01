@@ -205,7 +205,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         # pick and log sample audio
         if batch_idx % 250 == 0:
             self.log_random_sample(batch, title='train-sample')
-            # print(f'done:)')
         
         self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
 
@@ -320,7 +319,8 @@ class InstrumentDetectionTask(pl.LightningModule):
         assert embedding_batch.ndim == 2
         assert y.ndim == 1
         
-        self.logger.experiment.add_embedding(embedding_batch,tag=title,  metadata=metadata, global_step=self.global_step)
+        self.logger.experiment.add_embedding(embedding_batch,tag=title,  
+                                            metadata=metadata, global_step=self.global_step)
 
     def log_random_sample(self, batch, title='sample'):
         batch = self.batch_detach(batch)
@@ -336,90 +336,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.logger.experiment.add_text(f'{title}-path_to_audio/{truth}', 
                                         str(path_to_audio), 
                                         self.global_step)
-
-    def log_random_example_deprecated(self, batch, title='sample',):
-        """
-        log a random audio example with predictions and truths!
-        """
-        raise NotImplementedError 
-        audio = batch['X']
-        yhat = batch['yhat']
-        y = batch['y']
-        path_to_audio = batch['path_to_audio']
-
-        idx = np.random.randint(0, len(audio))
-        pred = self.classes[yhat[idx]]
-        truth = self.classes[y[idx]]
-
-        self.logger.experiment.add_audio(f'{title}-audio/{truth}', 
-            audio[idx], self.global_step, self.hparams.sample_rate)
-
-        self.logger.experiment.add_text(f'{title}-predVtruth', 
-            f'pred: {pred}\n truth:{truth}', 
-            self.global_step)
-        
-        self.logger.experiment.add_text(f'{title}-probits', 
-            f'pred: {yhat[idx].numpy()} \n truth: {y[idx].numpy()}', 
-            self.global_step)
-        
-        self.logger.experiment.add_text(f'{title}-audiopath', str(path_to_audio[idx]), self.global_step)
-
-    def log_example(self, audio, sr, yhat, y, title='sample'):
-        """note: example must be a SINGLE example. 
-        remove batch dimension b4 calling this
-        """
-        self.logger.experiment.add_audio(title, 
-                                        audio.detach().cpu(), 
-                                        self.global_step, 
-                                        sr)
-        pred = self.classes[int(yhat.detach().cpu())]
-        truth = self.classes[int(y.detach().cpu())]
-        self.logger.experiment.add_text(f'{title}', 
-            f'pred: {pred}\n truth:{truth}', 
-            self.global_step)
-
-    def log_layer_io(self, layer):
-        """
-        log a random example in the output of a layer 
-        and the batch's shape and stats on a text entry
-        """
-
-        # get the layer
-        batch = self.fwd_hooks[layer].output.detach().cpu()
-        idx = torch.randint(0, len(batch), (1,))
-        o = batch[idx][0]
-        
-        # if the layer is 2D, display as image
-        # if the layer is 1D, log as a heatmap
-        if o.ndim == 1:
-            # a sad attempt at a square img
-            o = o.view(32, -1)
-        elif o.ndim == 3:
-            # o = torchvision.utils.make_grid(   
-            #     o.unsqueeze(1), nrow=int(np.sqrt(o.shape[0])),
-            #     normalize=True)
-            o = o[0]
-        # elif o.ndim > 3:
-        #     raise Exception(f'cannot log tensor with ndim {o.ndim+1}')
-        fig = plt.figure(figsize=(12, 8))
-        ax = fig.add_subplot(111)
-        ax.imshow(o)
-        
-
-        # log
-        self.logger.experiment.add_figure(layer, fig, self.global_step)
-
-        plt.close(fig)
-
-        # log layer statistics
-        mean = batch.mean()
-        std = batch.std()
-        minimum = torch.min(batch)
-        maximum = torch.max(batch)
-
-        layer_stats = f'{layer:<40}\n\tmean:{mean}\n\std:{std}\n\min:{minimum}\n\max:{maximum}'
-
-        self.logger.experiment.add_text(layer, layer_stats, self.global_step)
 
     def register_all_hooks(self):
         layer_names = self.model.log_layers
@@ -443,10 +359,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         
         # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
-
-        # for yc in y:
-        #     if yc not in yhat:
-        #         print(f'MODEL DIDNT PREDICT {self.classes[yc]}')
 
         # CONFUSION MATRIX
         conf_matrix = sklearn.metrics.confusion_matrix(
@@ -474,7 +386,6 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         self.log_uncertainty_metrics(probits, y, prefix)
 
-        self.logger.experiment.add_pr_curve(f'pr_curve/{prefix}', labels=y, predictions=yhat, global_step=self.global_step)
         self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
         self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
 
