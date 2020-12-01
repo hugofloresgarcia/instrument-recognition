@@ -97,12 +97,14 @@ def load_model(model_name, output_units=None, dropout=0.5):
 class InstrumentDetectionTask(pl.LightningModule):
 
     def __init__(self, model, datamodule, 
+                 max_epochs,
                  learning_rate=0.0003,
                  weighted_cross_entropy=True, 
                  mixup=False, mixup_alpha=0.2,
-                 log_epoch_metrics=True 
+                 log_epoch_metrics=True, 
                  ):
         super().__init__()
+        self.max_epochs = max_epochs
         self.weighted_cross_entropy = weighted_cross_entropy
         self.mixup = mixup
         self.mixup_alpha = mixup_alpha
@@ -259,9 +261,10 @@ class InstrumentDetectionTask(pl.LightningModule):
             lr=self.learning_rate, 
             weight_decay=1e-5)
         scheduler = {
-            'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min'), 
-            'monitor': 'loss/train-epoch'
-        }
+            'scheduler': torch.optim.lr_scheduler.MultiStepLR(optimizer, 
+                                                              milestones=[0.5 * self.max_epochs,
+                                                                          0.75 * self.max_epochs], 
+                                                              gamma=0.1)}
         return [optimizer], [scheduler]
 
     # EPOCH ENDS
@@ -290,22 +293,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         probits = probits.detach().numpy()
         y = y.detach().numpy().astype(np.int)
 
-        # print(len(y))
-
-        # # restrict the amount of samples
-
-        #     print(y.shape)
-        #     print(y)
-        #     exit()
-
         # compute metrics
         ece = um.ece(y, probits, num_bins=30)
-        # self.logger.experiment.add_scalar(f'ECE/{prefix}', ece, self.global_step)
         self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
-
-        # bs = um.brier_score(y, probits)
-        # self.logger.experiment.add_scalar(f'Brier Score/{prefix}', bs, self.global_step)
-        
 
         # if prefix == 'test':
         #     print('computing reliability')
