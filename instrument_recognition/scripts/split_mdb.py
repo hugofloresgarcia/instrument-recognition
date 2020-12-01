@@ -5,7 +5,7 @@ import shutil
 
 import medleydb as mdb
 import instrument_recognition.utils as utils
-from instrument_recognition.datasets.base_dataset import BaseDataset, BaseDataModule
+from instrument_recognition.datasets import BaseDataset, BaseDataModule
 
 unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal', 'glockenspiel', 'tambourine', 'timpani', 'snare drum', 
                     'clarinet section', 'flute  section', 'tenor saxophone', 'trumpet section']

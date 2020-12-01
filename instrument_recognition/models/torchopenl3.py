@@ -11,22 +11,6 @@ import pytorch_lightning as pl
 from instrument_recognition.utils.train import timing, load_weights
 from instrument_recognition.models.timefreq import Melspectrogram
 
-def get_model(n_mels=128, embedding_size=512):
-    if embedding_size == 512:
-        maxpool_kernel=(16, 24)
-    elif embedding_size == 6144:
-        maxpool_kernel=(4, 8)
-    else:
-        raise ValueError(f'embedding size should be 512 or 6144 but got {embedding_size}')
-
-    assert n_mels in (128,), "n_mels should be 128"
-    spec = Melspectrogram(n_mels=n_mels)
-
-    conv = OpenL3Mel128(maxpool_kernel=maxpool_kernel)
-
-    model = nn.Sequential(spec, conv, nn.Flatten())
-    return model
-    
 class OpenL3Embedding(pl.LightningModule):
 
     def __init__(self, n_mels, embedding_size, pretrained=True):
@@ -67,7 +51,6 @@ def _get_kapre_melspectrogram_model(input_shape):
     # load original keras model
     openl3_keras = openl3.models.load_audio_embedding_model(input_repr='mel128', content_type='music', embedding_size=512)
 
-
     inp = openl3_keras.get_layer('melspectrogram_1').input
     oup = openl3_keras.get_layer('melspectrogram_1').output
 
@@ -83,7 +66,7 @@ def _get_kapre_melspectrogram_model(input_shape):
 class OpenL3Mel128(pl.LightningModule):
 
     def __init__(self, 
-                weight_file='/home/hugo/lab/mono_music_sed/instrument_recognition/weights/openl3/openl3_music_6144_no_mel_layer_pytorch_weights', 
+                weight_file='/home/hugo/lab/mono_music_sed/instrument_recognition/weights/openl3_music_6144_no_mel_layer_pytorch_weights', 
                 input_shape=(1, 48000), 
                 maxpool_kernel=(16, 24), 
                 maxpool_stride=(4, 8), 

@@ -7,9 +7,8 @@ import openl3
 
 import instrument_recognition.utils as utils
 
-from instrument_recognition.datasets.base_dataset import BaseDataset, CollateBatches
+from instrument_recognition.datasets import BaseDataset, CollateBatches
 from instrument_recognition.models import torchopenl3
-
 from instrument_recognition.scripts.split_mdb import unwanted_classes
 
 
