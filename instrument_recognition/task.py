@@ -33,8 +33,7 @@ class InstrumentDetectionTask(pl.LightningModule):
                  learning_rate=0.0003,
                  weighted_cross_entropy=True, 
                  mixup=False, mixup_alpha=0.2,
-                 log_epoch_metrics=True, 
-                 ):
+                 log_epoch_metrics=True):
         super().__init__()
         self.max_epochs = max_epochs
         self.weighted_cross_entropy = weighted_cross_entropy
