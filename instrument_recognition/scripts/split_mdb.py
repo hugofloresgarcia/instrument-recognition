@@ -8,7 +8,15 @@ import instrument_recognition.utils as utils
 from instrument_recognition.datasets import BaseDataset, BaseDataModule
 
 unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal', 'glockenspiel', 'tambourine', 'timpani', 'snare drum', 
-                    'clarinet section', 'flute  section', 'tenor saxophone', 'trumpet section']
+                    'clarinet section', 'flute section', 'tenor saxophone', 'trumpet section']
+
+remap_class_dict = {'violin section': 'violin', 'viola section': 'viola'}
+
+def remap_classes(metadata, remap_dict):
+    for i, entry in enumerate(metadata):
+        if entry['label'] in remap_dict.keys():
+            entry['label'] = remap_dict[entry['label']]
+    return metadata
 
 def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=20):
     # define split
@@ -41,6 +49,10 @@ def split_mdb_metadata(path_to_data, path_to_output, test_size=0.3, random_seed=
     # delete any entry that contains unwanted classes
     train_metadata = [e for e in train_metadata if e['label'] not in unwanted_classes]
     test_metadata = [e for e in test_metadata if e['label'] not in unwanted_classes]
+    
+    # remap sections
+    train_metadata = remap_classes(train_metadata, remap_class_dict)
+    test_metadata = remap_classes(test_metadata, remap_class_dict)
 
     # save new metadata to csv in out output path
     os.makedirs(os.path.join(base_train_path), exist_ok=True)

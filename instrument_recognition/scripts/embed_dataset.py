@@ -25,7 +25,7 @@ def get_original_openl3_embedding(model, X):
 def embed_dataset(path_to_data, path_to_output, 
                  embedding_model_name='openl3-128-512', 
                  batch_size=64, num_workers=18, gpuid=0, 
-                 use_augmented=True):
+                 use_augmented=False):
     # load our dataset
     dataset = BaseDataset(path_to_data, use_embeddings=False, use_augmented=use_augmented, unwanted_classes=unwanted_classes)
 
@@ -58,15 +58,15 @@ def embed_dataset(path_to_data, path_to_output,
                 continue
 
             # get the path to audio and make an embedding path from it 
-            audio_path_key = 'path_to_audio-augmented' if entry['is_augmented'] else 'path_to_audio'
+            audio_path_key = 'path_to_audio'
             path_to_embedding = entry[audio_path_key].replace(path_to_data, path_to_output+'/')
             assert 'wav' in entry[audio_path_key]
             path_to_embedding = path_to_embedding.replace('.wav', '.npy')
             os.makedirs(os.path.dirname(path_to_embedding), exist_ok=True)
             
-            embedding_path_key = 'path_to_embedding-augmented' if entry['is_augmented'] else 'path_to_emnbedding'
+            embedding_path_key = 'path_to_embedding'
             entry[embedding_path_key] = path_to_embedding
-            print(f'saving {embedding_path_key}')
+#             print(f'saving {path_to_embedding}')
 
             emb_out = embedding[i].detach().cpu().numpy()
             assert emb_out.ndim == 1

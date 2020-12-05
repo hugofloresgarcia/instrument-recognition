@@ -43,7 +43,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.path_to_data = path_to_data
         metadata = utils.data.load_dataset_metadata(path_to_data)
         self.setup_dataset(metadata)
-        # self._fix_augmented_path_bug()
+        self._fix_augmented_path_bug()
 
         self.use_embeddings = use_embeddings
         self.use_augmented = use_augmented

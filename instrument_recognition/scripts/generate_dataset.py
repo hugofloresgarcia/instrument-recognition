@@ -87,7 +87,8 @@ def get_audio_chunk(audio, sr, start_time, chunk_size):
     return chunked_audio
 
 def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name, 
-                             label, path_to_output, metadata_extras, augment=True):
+                             label, path_to_output, metadata_extras, augment=True, 
+                              max_worker_threads=50):
     """ this function will chunk a monophonic audio array 
     into chunks as determined by chunk_size and hop_size. 
     The output audio file will be saved to a foreground folder, scaper style, 
@@ -114,7 +115,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
     metadata = []
 
     start_times = np.arange(0, n_chunks, hop_size)
-    max_workers = 50
+    max_workers = max_worker_threads
 
     def save_chunk(start_time):
         # round start time bc of floating pt errors
@@ -159,7 +160,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
         # if either of these don't exist, create both
         if (not os.path.exists(chunk_metadata_path)) \
             or (not os.path.exists(audio_chunk_path)):
-            print(f'\t saving {chunk_metadata_path}')
+#             print(f'\t saving {chunk_metadata_path}', sep='', end='', flush=True)
             if augment:
                 sf.write(aug_chunk_path, aug_chunk, sr, 'PCM_24')
 
@@ -176,7 +177,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
 # args = path_to_output, mtrack, chunk_size, sr, hop_size
 def _process_mdb_track(args):
     metadata = []
-    path_to_output, mtrack, chunk_size, sr, hop_size, augment = args
+    path_to_output, mtrack, chunk_size, sr, hop_size, augment, max_worker_threads = args
     # figure out whether we are going to add FX to this track or not
 
     for stem_id, stem in mtrack.stems.items():
@@ -188,7 +189,7 @@ def _process_mdb_track(args):
 
         # if we already found the base chunk pattern in our o
         # output path, then skip this stem
-        print(f'processing {base_chunk_name}')
+#         print(f'processing {base_chunk_name}')
 
         try:
             audio = load_audio_file(path_to_audio, sr)
@@ -222,12 +223,14 @@ def _process_mdb_track(args):
                             'error': True}]
             
 def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0, 
-                              hop_size=1.0, num_workers=-1, augment=True):
+                              hop_size=1.0, num_workers=-1, augment=True,
+                              max_worker_threads=50):
 
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
     args = []
     for mtrack in mtrack_generator:
-        args.append((path_to_output, mtrack, chunk_size, sr, hop_size, augment))
+        args.append((path_to_output, mtrack, chunk_size, sr, 
+                     hop_size, augment, max_worker_threads))
 
     # run as a single process if num workers is less than 1
     if num_workers == 0:
@@ -239,10 +242,7 @@ def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0,
         pool = Pool(num_workers)
 
         # do the thing!
-        # pool.map(_process_mdb_track, args)
         tqdm.contrib.concurrent.process_map(_process_mdb_track, args)
-        # pool.close()
-        # pool.join()
     
 def fix_metadata_and_save_separate_dicts(metadata):
     pbar = tqdm.tqdm(metadata)
