@@ -7,6 +7,9 @@ import pandas as pd
 import tqdm.contrib.concurrent
 from sklearn.model_selection import train_test_split
 
+def get_abspath(path):
+    return os.path.abspath(os.path.expanduser(path))
+
 def get_classlist(metadata):
     """ iterate through metadata and get the set
         of all labels

@@ -5,6 +5,14 @@ import torch
 import torchaudio
 import pydub
 
+def load_audio_file(path_to_audio, sr=48000):
+    """ wrapper for loading mono audio with librosa
+    returns:
+        audio (np.ndarray): monophonic audio with shape (samples,) 
+    """
+    audio, sr = librosa.load(path_to_audio, mono=True, sr=sr)
+    return audio
+
 def _check_audio_types(audio):
     if not isinstance(audio, torch.Tensor) and not isinstance(audio, np.ndarray):
         raise Exception(f'got {type(audio)} but was expeting torch tensor or np array')

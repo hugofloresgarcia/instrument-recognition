@@ -1,4 +1,5 @@
 import os
+import logging
 
 import numpy as np
 import pandas as pd
@@ -6,9 +7,10 @@ import torch
 from torch.utils.data import DataLoader
 import librosa
 import pytorch_lightning as pl
-import logging
 
 import instrument_recognition.utils as utils
+
+remap_class_dict = {'violin section': 'violin', 'viola section': 'viola'}
 
 def load_datamodule(path_to_data, batch_size, num_workers, use_npy):
 
@@ -26,6 +28,12 @@ def debatch(batch):
         if isinstance(v, list):
             batch[k] = v[0]
     return batch
+
+def remap_classes(metadata, remap_dict):
+    for i, entry in enumerate(metadata):
+        if entry['label'] in remap_dict.keys():
+            entry['label'] = remap_dict[entry['label']]
+    return metadata
 
 class BaseDataset(torch.utils.data.Dataset):
 
@@ -51,6 +59,7 @@ class BaseDataset(torch.utils.data.Dataset):
 
         logging.info(f'loading metadata from {path_to_data}...')
         metadata = utils.data.load_dataset_metadata(path_to_data)
+        metadata = remap_classes(metadata, remap_class_dict)
         self.setup_dataset(metadata)
 
         self.use_npy = use_npy

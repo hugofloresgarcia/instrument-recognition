@@ -2,6 +2,48 @@ import numpy as np
 import sox
 import librosa
 
+from instrument_recognition import utils
+
+def _check_audio_types(audio):
+    assert audio.ndim == 1, "audio must be mono"
+    assert isinstance(audio, np.ndarray)
+
+def get_full_effect_chain():
+    effect_chain = ['compand','overdrive', 'eq', 'pitch', 'speed', 
+                    'phaser', 'flanger', 'reverb', 'chorus', 'speed', 
+                    'lowpass']
+    return effect_chain
+
+def augment_from_file_to_file(input_path, output_path, effect_chain=None):
+    effect_chain = effect_chain if effect_chain is not None else get_full_effect_chain()
+    tfm, effect_params = get_random_transformer(effect_chain)
+    tfm.build_file(input_path, output_path)
+    return effect_params
+
+def augment_from_array_to_array(audio, sr, effect_chain=None):
+    effect_chain = effect_chain if effect_chain is not None else get_full_effect_chain()
+    tfm, effect_params = get_random_transformer(effect_chain)
+    
+    # for now, assert that audio is mono and convert to sox format
+    assert audio.ndim == 1
+    audio = np.expand_dims(audio, -1)
+    tfm_audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
+    audio = np.squeeze(audio, axis=-1)
+    tfm_audio = utils.audio.zero_pad(tfm_audio, audio.shape[0])
+    tfm_audio = tfm_audio[0:audio.shape[0]]
+    return tfm_audio, effect_params
+
+def trim_silence(audio, sr, min_silence_duration=0.3):
+    """ trim silence from audio array using sox
+    """
+    _check_audio_types(audio)
+    tfm = sox.Transformer()
+    tfm.silence(min_silence_duration=min_silence_duration, 
+                buffer_around_silence=False)
+    audio = tfm.build_array(input_array=np.expand_dims(audio, axis=1) , sample_rate_in=sr)
+    # audio = audio.T[0]
+    return audio
+
 def get_randn(mu, std, min=None, max=None):
     """ get a random float, sampled from a normal 
     distribution with mu and std, clipped between min and max
