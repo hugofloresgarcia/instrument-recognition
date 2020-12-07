@@ -9,6 +9,7 @@ import librosa
 import pytorch_lightning as pl
 
 import instrument_recognition.utils as utils
+from instrument_recognition.task import ACCELERATOR
 
 remap_class_dict = {'violin section': 'violin', 'viola section': 'viola'}
 
@@ -65,7 +66,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.use_npy = use_npy
 
         if unwanted_classes is None:
-            from instrument_recognition.scripts.split_mdb import unwanted_classes as uc
+            from instrument_recognition.partition import unwanted_classes as uc
             unwanted_classes = uc
 
         if unwanted_classes is not None:
@@ -195,12 +196,13 @@ class BaseDataModule(pl.LightningDataModule):
                 **dataset_kwargs):
         super().__init__()
         self.batch_size = batch_size
-        self.num_workers = num_workers
+        self.num_workers = num_workers if 'ddp' not in ACCELERATOR else 3
 
         self.collate_fn = CollateBatches()
 
         self.path_to_data = path_to_data
         self.dataset_kwargs = dataset_kwargs
+
 
     def load_dataset(self):
         path_to_data = os.path.abspath(self.path_to_data)

@@ -17,8 +17,8 @@ CUDA_DEVICE = 0
 preprocessors = [
     {'path': '/home/hugo/data/mono_music_sed/mdb/EMBEDDINGS/', 
     'model': OpenL3Embedding(n_mels=128, embedding_size=6144, pretrained=True).cuda(CUDA_DEVICE)}, 
-    {'path': '/home/hugo/data/mono_music_sed/mdb/SPECTROGRAMS/', 
-    'model': Melspectrogram(sr=48000, n_mels=128).cuda(CUDA_DEVICE)}
+    # {'path': '/home/hugo/data/mono_music_sed/mdb/SPECTROGRAMS/', 
+    # 'model': Melspectrogram(sr=48000, n_mels=128).cuda(CUDA_DEVICE)}
 ]
 
 if __name__ == "__main__":
@@ -34,6 +34,7 @@ if __name__ == "__main__":
                 (dm.val_dataloader(), dm.val_data, 'validation'))
 
         model = preprocessor['model']
+        model.eval()
 
         # iterate through the dataloaders
         for dl, dataset, subset_name in pairs:

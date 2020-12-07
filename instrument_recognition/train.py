@@ -44,7 +44,6 @@ def run_trial(exp_dict, test_only=False):
                                     max_epochs=exp_dict['max_epochs'],
                                     random_seed=exp_dict['random_seed'], 
                                     log_dir=exp_dict['log_dir'],
-                                    test_only=test_only,
                                     **exp_dict['trainer_kwargs'])
 
     # save exp_dict to yaml file for easy reloading

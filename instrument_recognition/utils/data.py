@@ -57,6 +57,10 @@ def load_dict_yaml(path_to_yaml):
 def remove_dead_entries(metadata):
     new_m = []
     for e in metadata:
+        if 'path_to_audio' not in e:
+            print('this entry is missing a path to audio')
+            print(e)
+            continue
         if isinstance(e['path_to_audio'], str):
             new_m.append(e)
     return new_m

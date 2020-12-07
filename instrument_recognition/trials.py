@@ -4,9 +4,9 @@ import os
 now = datetime.datetime.now().strftime("%d.%m.%Y")
 log_dir = os.path.join('logs', f'experiment-{now}')
 
-FIXED = dict(batch_size=128*3, num_workers=20, learning_rate=3e-4,
+FIXED = dict(batch_size=32*3, num_workers=20, learning_rate=3e-4,
              weighted_cross_entropy=True, dropout=0.5, random_seed=20, 
-             max_epochs=80, log_dir=log_dir,  version=0,  gpuid=-1,
+             max_epochs=60, log_dir=log_dir,  version=0,  gpuid=-1,
              trainer_kwargs={}) 
 
 # define paths to datamodules 
@@ -37,7 +37,7 @@ trials = [
     
     dict(name='finetuned-mlp-ERM', 
      path_to_data=DM_PATHS['SPECTROGRAMS'], 
-     batch_size=32*3,
+    #  batch_size=32*3,
      use_npy=True, 
      model_name='openl3mlp-6144', 
      mixup=False, 
@@ -46,7 +46,7 @@ trials = [
     
     dict(name='baseline-mlp-ERM', 
      path_to_data=DM_PATHS['SPECTROGRAMS'], 
-     batch_size=32*3,
+    #  batch_size=32*3,
      use_npy=True, 
      model_name='baseline-6144', 
      mixup=False, 
@@ -62,7 +62,7 @@ trials = [
     
     dict(name='baseline-mlp-MIXUP-alpha=0.2', 
      path_to_data=DM_PATHS['SPECTROGRAMS'], 
-     batch_size=32*3,
+    #  batch_size=32*3,
      use_npy=True, 
      model_name='baseline-6144', 
      mixup=True, 
@@ -71,24 +71,23 @@ trials = [
     
     dict(name='finetuned-mlp-MIXUP-alpha=0.2', 
      path_to_data=DM_PATHS['SPECTROGRAMS'], 
-     batch_size=32*3,
+    #  batch_size=32*3,
      use_npy=True, 
      model_name='openl3mlp-6144', 
      mixup=True, 
      mixup_alpha=0.2,
      trainer_kwargs=dict(accumulate_grad_batches=8)),
-    
-    # MODELS WITH MIXUP (ALPHA = 0.4)
-    dict(name='openl3-mlp-MIXUP-alpha=0.4',
-        path_to_data=DM_PATHS['EMBEDDINGS-6144'],
-        use_npy= True, 
-        model_name='mlp-6144',
-        mixup=True,
-        mixup_alpha=0.4), 
 
+    dict(name='openl3-mlp-MIXUP-alpha=0.4',
+    path_to_data=DM_PATHS['EMBEDDINGS-6144'],
+    use_npy=True, 
+    model_name='mlp-6144',
+    mixup=True,
+    mixup_alpha=0.4),
+    
     dict(name='baseline-mlp-MIXUP-alpha=0.4', 
      path_to_data=DM_PATHS['SPECTROGRAMS'], 
-     batch_size=32*3,
+    #  batch_size=32*3,
      use_npy=True, 
      model_name='baseline-6144', 
      mixup=True, 
@@ -97,12 +96,13 @@ trials = [
     
     dict(name='finetuned-mlp-MIXUP-alpha=0.4', 
      path_to_data=DM_PATHS['SPECTROGRAMS'], 
-     batch_size=32*3,
+    #  batch_size=32*3,
      use_npy=True, 
      model_name='openl3mlp-6144', 
      mixup=True, 
      mixup_alpha=0.4,
      trainer_kwargs=dict(accumulate_grad_batches=8))
+
 ]
 
 trials = {t['name']: make_trial(t) for t in trials}
