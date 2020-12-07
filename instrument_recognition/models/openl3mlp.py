@@ -14,7 +14,7 @@ class OpenL3MLP(pl.LightningModule):
 
     def __init__(self, embedding_size: int, dropout: float, 
                 num_output_units: int, sr=48000, pretrained: bool =  True, 
-                mlp_state_dict_path=None):
+                mlp_state_dict_path=None, use_spectrogram_input=False):
         super().__init__()
         self.embedding_size = embedding_size
         self.dropout = dropout
@@ -25,7 +25,8 @@ class OpenL3MLP(pl.LightningModule):
         
         # model architecture stuff
         n_mels = 128
-        self.openl3 = OpenL3Embedding(n_mels, embedding_size=embedding_size, pretrained=pretrained)
+        self.openl3 = OpenL3Embedding(n_mels, embedding_size=embedding_size, pretrained=pretrained, 
+                                                    use_spectrogram_input=use_spectrogram_input)
         if embedding_size == 512:
             self.mlp = MLP512(dropout=dropout, num_output_units=num_output_units)
         elif embedding_size == 6144:

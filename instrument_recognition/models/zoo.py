@@ -9,21 +9,21 @@ def load_model(model_name, output_units=None, dropout=0.5, random_seed=20):
     """
     if model_name == 'baseline-512':
         model = OpenL3MLP(embedding_size=512, dropout=dropout, num_output_units=output_units, 
-                          sr=48000, pretrained=False)
+                          sr=48000, pretrained=False, use_spectrogram_input=True)
 
     elif model_name == 'baseline-6144':
         model = OpenL3MLP(embedding_size=6144, dropout=dropout, num_output_units=output_units, 
-                          sr=48000, pretrained=False)
+                          sr=48000, pretrained=False, use_spectrogram_input=True)
         
     elif model_name == 'openl3mlp-512':
         model = OpenL3MLP(embedding_size=512, 
                           dropout=dropout,
-                          num_output_units=output_units)
+                          num_output_units=output_units, use_spectrogram_input=True)
 
     elif model_name == 'openl3mlp-6144':
         model = OpenL3MLP(embedding_size=6144, 
                           dropout=dropout,
-                          num_output_units=output_units)
+                          num_output_units=output_units, use_spectrogram_input=True)
 
     elif model_name == 'mlp-512':
         model = MLP512(dropout, output_units)

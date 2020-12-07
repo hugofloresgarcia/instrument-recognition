@@ -31,6 +31,8 @@ install_requires = [
     'tensorboard==2.2',
     'torchaudio',
     'torchvision',
+    'tqdm', 
+    'soundfile'
     'librosa', 
     'sox']
 

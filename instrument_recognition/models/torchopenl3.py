@@ -13,7 +13,8 @@ from instrument_recognition.models.timefreq import Melspectrogram
 
 class OpenL3Embedding(pl.LightningModule):
 
-    def __init__(self, n_mels, embedding_size, pretrained=True):
+    def __init__(self, n_mels, embedding_size, pretrained=True, 
+                 use_spectrogram_input=False):
         super().__init__()
         assert isinstance(n_mels, int)
         assert isinstance(embedding_size, int)
@@ -24,17 +25,21 @@ class OpenL3Embedding(pl.LightningModule):
         else: 
             raise ValueError(f'embedding size should be 512 or 6144 but got {embedding_size}')
 
-        assert n_mels in (128, ), "n_mels must be 128. 256 model is not supported yet"    
+        assert n_mels in (128, ), "n_mels must be 128. 256 model is not supported yet"   
+
+        self.use_spectrogram_input = use_spectrogram_input 
         
-        self.filters = Melspectrogram(sr=48000, n_mels=n_mels,
-                                      fmin=0.0, fmax=None, power_melgram=1.0, 
-                                      return_decibel_melgram=True, trainable_fb=False, 
-                                      htk=True)
+        if not use_spectrogram_input:
+            self.filters = Melspectrogram(sr=48000, n_mels=n_mels,
+                                        fmin=0.0, fmax=None, power_melgram=1.0, 
+                                        return_decibel_melgram=True, trainable_fb=False, 
+                                        htk=True)
         self.openl3 = OpenL3Mel128(maxpool_kernel=maxpool_kernel, use_kapre=False, pretrained=pretrained)
         self.flatten = nn.Flatten()
     
     def forward(self, x):
-        x = self.filters(x)
+        if not self.use_spectrogram_input:
+            x = self.filters(x)
         x = self.openl3(x)
         return self.flatten(x)
 
