@@ -27,7 +27,7 @@ def embed_dataset(path_to_data, path_to_output,
                  batch_size=64, num_workers=18, gpuid=0, 
                  use_augmented=False):
     # load our dataset
-    dataset = BaseDataset(path_to_data, use_embeddings=False, use_augmented=use_augmented, unwanted_classes=unwanted_classes)
+    dataset = BaseDataset(path_to_data, use_npy=False, use_augmented=use_augmented, unwanted_classes=unwanted_classes)
 
     # make a dataloader
     loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False, 

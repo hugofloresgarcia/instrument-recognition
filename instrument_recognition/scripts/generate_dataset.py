@@ -87,8 +87,7 @@ def get_audio_chunk(audio, sr, start_time, chunk_size):
     return chunked_audio
 
 def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name, 
-                             label, path_to_output, metadata_extras, augment=True, 
-                              max_worker_threads=50):
+                             label, path_to_output, metadata_extras, augment=True):
     """ this function will chunk a monophonic audio array 
     into chunks as determined by chunk_size and hop_size. 
     The output audio file will be saved to a foreground folder, scaper style, 
@@ -112,10 +111,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
     audio_len = len(audio)
     n_chunks = int(np.ceil(audio_len/(chunk_size*sr))) # use ceil because we can zero pad
 
-    metadata = []
-
     start_times = np.arange(0, n_chunks, hop_size)
-    max_workers = max_worker_threads
 
     def save_chunk(start_time):
         # round start time bc of floating pt errors
@@ -130,9 +126,7 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
                                         audio_chunk_name)
         
         if augment:
-            aug_chunk, effect_params = augment_from_array_to_array(audio_chunk, sr)
-            aug_chunk_name = base_chunk_name + f'/{start_time}-AUGMENTED.wav'
-            aug_chunk_path = audio_chunk_path.replace(audio_chunk_name, aug_chunk_name)
+            audio_chunk, effect_params = augment_from_array_to_array(audio_chunk, sr)
         else:
             effect_params = []
 
@@ -153,16 +147,11 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
             start_time=float(start_time), 
             sr=sr, 
             effect_params=effect_params))
-        
-        if augment:
-            entry['path_to_audio-augmented'] = aug_chunk_path
 
         # if either of these don't exist, create both
         if (not os.path.exists(chunk_metadata_path)) \
             or (not os.path.exists(audio_chunk_path)):
 #             print(f'\t saving {chunk_metadata_path}', sep='', end='', flush=True)
-            if augment:
-                sf.write(aug_chunk_path, aug_chunk, sr, 'PCM_24')
 
             sf.write(audio_chunk_path, audio_chunk, sr, 'PCM_24')
             utils.data.save_dict_yaml(entry, chunk_metadata_path)
@@ -171,16 +160,24 @@ def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name,
             # print(f'already found: {audio_chunk_path} and {chunk_metadata_path}')
         return entry
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers) as p:
-        p.map(save_chunk, start_times)
+    for start_time in start_times:
+        save_chunk(start_time)
+
+    # with concurrent.futures.ThreadPoolExecutor(max_workers) as p:
+    #     p.map(save_chunk, start_times)
 
 # args = path_to_output, mtrack, chunk_size, sr, hop_size
+from instrument_recognition.scripts.split_mdb import unwanted_classes, remap_class_dict
 def _process_mdb_track(args):
     metadata = []
     path_to_output, mtrack, chunk_size, sr, hop_size, augment, max_worker_threads = args
     # figure out whether we are going to add FX to this track or not
 
     for stem_id, stem in mtrack.stems.items():
+        # skip if we don't want this class
+        if stem.instrument[0] in unwanted_classes:
+            continue
+
         # get the audio path 
         path_to_audio = stem.audio_path
 
@@ -224,12 +221,25 @@ def _process_mdb_track(args):
             
 def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0, 
                               hop_size=1.0, num_workers=-1, augment=True,
+                              random_seed=20, test_size=0.15,
                               max_worker_threads=50):
 
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
     args = []
+
+    # define train test split
+    splits = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
+                                                random_state=random_seed)[0]
+
     for mtrack in mtrack_generator:
-        args.append((path_to_output, mtrack, chunk_size, sr, 
+        if mtrack.track_id in splits['train']:
+            augment = True
+            path = os.path.join(path_to_output, 'train')
+        elif mtrack.track_id in splits['test']:
+            augment = False
+            path = os.path.join(path_to_output, 'test')
+        
+        args.append((path, mtrack, chunk_size, sr, 
                      hop_size, augment, max_worker_threads))
 
     # run as a single process if num workers is less than 1
@@ -239,7 +249,7 @@ def generate_medleydb_samples(path_to_output, sr=48000, chunk_size=1.0,
             _process_mdb_track(arg)
     else:
         num_workers = None if num_workers < 0 else num_workers 
-        pool = Pool(num_workers)
+        # pool = Pool(num_workers)
 
         # do the thing!
         tqdm.contrib.concurrent.process_map(_process_mdb_track, args)

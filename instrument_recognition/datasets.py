@@ -6,23 +6,30 @@ import torch
 from torch.utils.data import DataLoader
 import librosa
 import pytorch_lightning as pl
+import logging
 
 import instrument_recognition.utils as utils
 
-def load_datamodule(path_to_data, batch_size, num_workers, use_embeddings):
+def load_datamodule(path_to_data, batch_size, num_workers, use_npy):
 
     datamodule = BaseDataModule(
         path_to_data=path_to_data,
         batch_size=batch_size, 
         num_workers=num_workers,
-        use_embeddings=use_embeddings)
+        use_npy=use_npy)
     datamodule.setup()
     
     return datamodule
 
+def debatch(batch):
+    for k,v in batch.items():
+        if isinstance(v, list):
+            batch[k] = v[0]
+    return batch
+
 class BaseDataset(torch.utils.data.Dataset):
 
-    def __init__(self, path_to_data: str, use_embeddings: bool=True, use_augmented: bool = False,  
+    def __init__(self, path_to_data: str, use_npy: bool=True,
                 class_subset: list=None, unwanted_classes: list=None):
         """reads an audio dataset.
 
@@ -37,16 +44,16 @@ class BaseDataset(torch.utils.data.Dataset):
 
         Args:
             path_to_data ([type]): path to the dataset
-            use_embeddings (bool, optional): [description]. Defaults to True.
+            use_npy (bool, optional): [description]. Defaults to True.
             class_subset ([type], optional): [description]. Defaults to None.
         """
         self.path_to_data = path_to_data
+
+        logging.info(f'loading metadata from {path_to_data}...')
         metadata = utils.data.load_dataset_metadata(path_to_data)
         self.setup_dataset(metadata)
-        self._fix_augmented_path_bug()
 
-        self.use_embeddings = use_embeddings
-        self.use_augmented = use_augmented
+        self.use_npy = use_npy
 
         if unwanted_classes is None:
             from instrument_recognition.scripts.split_mdb import unwanted_classes as uc
@@ -82,15 +89,7 @@ class BaseDataset(torch.utils.data.Dataset):
         if 'effect_params' in entry:
             entry['effect_params'] = {}
 
-        entry['is_augmented'] = True if self.use_augmented else False
-
         return item
-    
-    def _fix_augmented_path_bug(self):
-        for entry in self.metadata:
-            for key in entry:
-                if '-augmented' in key:
-                    entry[key] = self.path_to_data + f'/{entry["label"]}/' + entry[key]
 
     def setup_dataset(self, metadata):
         self.metadata = metadata
@@ -108,7 +107,7 @@ class BaseDataset(torch.utils.data.Dataset):
         self.setup_dataset(subset)    
     
     def get_X(self, entry):
-        X = self.load_embedding(entry) if self.use_embeddings else self.load_audio(entry)
+        X = self.load_numpy(entry) if self.use_npy else self.load_audio(entry)
         return X 
 
     def get_y(self, entry):
@@ -120,7 +119,7 @@ class BaseDataset(torch.utils.data.Dataset):
     def load_audio(self, entry):
         assert 'path_to_audio' in entry, f'didnt find a path to audio in {entry}'
         # load audio and set to correct format
-        path_key = 'path_to_audio-augmented' if self.use_augmented else 'path_to_audio'
+        path_key = 'path_to_audio'
         X, _ = librosa.load(entry[path_key], sr=entry['sr'], mono=True)
         X = torch.from_numpy(X).float()
 
@@ -130,10 +129,10 @@ class BaseDataset(torch.utils.data.Dataset):
         X = X.unsqueeze(0)
         return X
 
-    def load_embedding(self, entry):
-        assert 'path_to_embedding' in entry, f'didnt find a path to embedding in {entry}'
+    def load_numpy(self, entry):
+        assert 'path_to_npy' in entry, f'didnt find a path to npy in {entry}'
         # load audio and set to correct format
-        path_key = 'path_to_embedding-augmented' if self.use_augmented else 'path_to_embedding'
+        path_key = 'path_to_npy'
         X = np.load(entry[path_key])
         X = torch.from_numpy(X).float()
         return X
