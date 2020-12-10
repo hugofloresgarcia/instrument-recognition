@@ -64,7 +64,7 @@ class Ensemble(pl.LightningModule):
         ensemble_preds = torch.stack([m(x) for m in self.members], dim=0)
         return ensemble_preds.mean(dim=0)
             
-    
+
 
 def init_weights(m):
     if type(m) == nn.Linear:

@@ -2,21 +2,17 @@ import time
 import os
 
 import numpy as np
+import torch.nn as nn
 import pytorch_lightning as pl
 import torch
 
-def save_torchscript_model(model, save_path, add_softmax=True):
+def save_torchscript_model(model, save_path):
     """
     saves a pl.LightningModule to torchscript via trace
     """
     audio = torch.randn((10, 1, 48000))
-    
-    # add a softmax
-    if add_softmax:
-        model = lambda x: torch.softmax(model(x), dim=1)
 
     traced_module = torch.jit.trace(model, audio)
-
     sm = torch.jit.script(traced_module)
     torch.jit.save(sm, save_path)
 

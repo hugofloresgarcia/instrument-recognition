@@ -9,7 +9,6 @@ import librosa
 import pytorch_lightning as pl
 
 import instrument_recognition.utils as utils
-from instrument_recognition.task import ACCELERATOR
 
 remap_class_dict = {'violin section': 'violin', 'viola section': 'viola'}
 
@@ -196,7 +195,7 @@ class BaseDataModule(pl.LightningDataModule):
                 **dataset_kwargs):
         super().__init__()
         self.batch_size = batch_size
-        self.num_workers = num_workers if 'ddp' not in ACCELERATOR else 3
+        self.num_workers = num_workers
 
         self.collate_fn = CollateBatches()
 

@@ -51,7 +51,7 @@ def save_dict_yaml(d, save_path):
 
 def load_dict_yaml(path_to_yaml):
     with open(path_to_yaml, 'r') as f:
-        d = yaml.load(f)
+        d = yaml.load(f, allow_pickle=True)
     return d
 
 def remove_dead_entries(metadata):

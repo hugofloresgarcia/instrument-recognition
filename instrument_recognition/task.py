@@ -26,14 +26,12 @@ import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 
 
-ACCELERATOR = 'dp'
-
 def split(a, n):
     "thank you stack overflow"
     k, m = divmod(len(a), n)
     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 
-class InstrumentDetectionTask(pl.LightnngModule):
+class InstrumentDetectionTask(pl.LightningModule):
 
     def __init__(self, model, datamodule, 
                  max_epochs,
@@ -128,9 +126,9 @@ class InstrumentDetectionTask(pl.LightnngModule):
         return dict(loss=loss, y=y.detach(), probits=probits.detach(),
                     yhat=yhat.detach(), X=X.detach())
 
-    def training_step(self, batch, batch_idx):
-
-        # get result of forward pass
+    def _ensemble_main_step(self, batch, batch_idx, train=False):
+        """" may not need this anymore
+        """
         if self.model.is_ensemble:
             # split the batch into self.num_members
             batch = split(batch, self.num_members)
@@ -141,6 +139,10 @@ class InstrumentDetectionTask(pl.LightnngModule):
                 result[key] = torch.stack([r[key] for r in result_list]).mean(dim=0)
         else:
             result = self._main_step(batch, batch_idx, train=True)
+        return result
+
+    def training_step(self, batch, batch_idx):
+        result = self._main_step(batch, batch_idx, train=True)
 
         # update the batch with the result
         batch.update(result)
@@ -243,16 +245,21 @@ class InstrumentDetectionTask(pl.LightnngModule):
         ece = um.ece(y, probits, num_bins=30)
         self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
-        # if prefix == 'test':
-        #     print('computing reliability')
-        #     max_sample_size = 10000
-        #     if len(y) > max_sample_size:
-        #         indices = np.random.choice(np.arange(len(y)), max_sample_size)
-        #         y = np.take(y, indices, axis=0)
-        #         probits = np.take(y, indices, axis=0)
-        #     reliability_fig = um.reliability_diagram(probits, y)
-        #     self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
-        #     print('done :)')
+#         if prefix == 'test':
+#             print('computing reliability')
+#             reliability_fig = um.reliability_diagram(probits, y)
+
+#             log_dir = self.log_dir
+#             confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
+#             confidences = np.array(confidences)
+#             accuracies = np.array(accuracies)
+#             xbins = np.array(xbins)
+#             np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
+#             np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
+#             np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
+
+#             self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
+#             print('done :)')
 
     def log_sklearn_metrics(self, yhat, y, prefix='val'):
         y = y.detach().cpu().numpy()
@@ -302,7 +309,7 @@ class InstrumentDetectionTask(pl.LightnngModule):
         yhat = torch.cat([o['yhat'] for o in outputs]).detach().cpu()
         y = torch.cat([o['y'] for o in outputs]).detach().cpu()
         probits =  torch.cat([o['probits'] for o in outputs]).detach().cpu()
-        loss = torch.cat([o['loss'] for o in outputs]).detach().cpu()
+        loss = torch.stack([o['loss'] for o in outputs]).detach().cpu()
         
         # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
@@ -326,10 +333,11 @@ class InstrumentDetectionTask(pl.LightnngModule):
         norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classes))
 
         # log images
-        self.log(f'accuracy/{prefix}/epoch', accuracy_score(y, yhat, normalize=True))
-        self.log(f'precision/{prefix}/epoch', precision_score(y, yhat, average='micro'))
-        self.log(f'recall/{prefix}/epoch', recall_score(y, yhat, average='micro'))
-        self.log(f'fscore/{prefix}/epoch', fbeta_score(y, yhat, average='micro', beta=1))
+        self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
+        self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'))
+        self.log(f'recall/{prefix}', recall_score(y, yhat, average='micro'))
+        self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
+        self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
 
         self.log_uncertainty_metrics(probits, y, prefix)
 
@@ -338,13 +346,14 @@ class InstrumentDetectionTask(pl.LightnngModule):
 
         return self.batch_detach(outputs)
 
-def train_instrument_detection_model(model, 
+def train_instrument_detection_model(task, 
                                     name: str,
                                     version: int,
                                     gpuid: int,
                                     log_dir: str = './test-tubes',
                                     max_epochs: int = 100,
                                     random_seed: int = 20, 
+                                    test=False,
                                     **trainer_kwargs):
     from test_tube import Experiment
     
@@ -366,6 +375,7 @@ def train_instrument_detection_model(model,
     # set up logging and checkpoint dirs
     log_dir = os.path.join(log_dir, name, f'version_{version}')
     os.makedirs(log_dir, exist_ok=True)
+    task.log_dir = log_dir
     checkpoint_dir = os.path.join(log_dir, 'checkpoints')
     best_ckpt = utils.train.get_best_ckpt_path(checkpoint_dir)
     
@@ -373,28 +383,35 @@ def train_instrument_detection_model(model,
     # set up checkpoint callbacks
     from pytorch_lightning.callbacks import ModelCheckpoint
     checkpoint_callback = ModelCheckpoint(
-        filepath=checkpoint_dir + '/{epoch:02d}-{loss_val:.2f}', 
-        monitor='loss/val', 
+        filepath=checkpoint_dir + '/{epoch:02d}-{fscore_val:.2f}', 
+        monitor='fscore/val', 
         verbose=True, 
+        mode='max',
         save_top_k=3)
     
-    if hasattr(model, 'callback_list'):
-        callbacks = model.callback_list
+    if hasattr(task, 'callback_list'):
+        callbacks = task.callback_list
     else:
         callbacks = []
 
     if gpuid is not None:
         if gpuid == -1:
             gpus = -1
+            accelerator = 'dp'
+        elif isinstance(gpuid, list):
+            gpus = gpuid
+            accelerator = 'dp'
         else:
             gpus = [gpuid]
+            accelerator = None
     else:
         gpus = None
+        accelerator = None
 
     # hardcode some 
     from pytorch_lightning import  Trainer
     trainer = Trainer(
-        accelerator=ACCELERATOR,
+        accelerator=accelerator,
         # distributed_backend='dp',
         log_every_n_steps=100,
         max_epochs=max_epochs,
@@ -415,6 +432,9 @@ def train_instrument_detection_model(model,
         **trainer_kwargs)
 
     # train, then test
-    trainer.fit(model)
-    # test_log = trainer.test()
-    # return test_log
+    if not test:
+        trainer.fit(task)
+        result = trainer.test()
+    else:
+        result = trainer.test(task)
+    return task, result
