@@ -204,11 +204,6 @@ if __name__ == "__main__":
                                     hop_size=HOP_SIZE, base_chunk_name=base_chunk_name, 
                                     label=label, path_to_output=output_path, 
                                     metadata_extras=entry, augment=augment)
-            # except Exception as e:
-            #     print(f'exception occured: {e}')
-            #     print(f'FAILED TO LOAD: {path_to_audio}')
 
         # DO IT IN PARALLEL
         tqdm.contrib.concurrent.process_map(split_and_augment, metadata)
-        # for entry in metadata:
-        #     split_and_augment(entry)

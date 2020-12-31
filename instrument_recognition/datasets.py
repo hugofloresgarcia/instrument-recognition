@@ -12,17 +12,6 @@ import instrument_recognition.utils as utils
 
 remap_class_dict = {'violin section': 'violin', 'viola section': 'viola'}
 
-def load_datamodule(path_to_data, batch_size, num_workers, use_npy):
-
-    datamodule = BaseDataModule(
-        path_to_data=path_to_data,
-        batch_size=batch_size, 
-        num_workers=num_workers,
-        use_npy=use_npy)
-    datamodule.setup()
-    
-    return datamodule
-
 def debatch(batch):
     for k,v in batch.items():
         if isinstance(v, list):
@@ -201,7 +190,6 @@ class BaseDataModule(pl.LightningDataModule):
 
         self.path_to_data = path_to_data
         self.dataset_kwargs = dataset_kwargs
-
 
     def load_dataset(self):
         path_to_data = os.path.abspath(self.path_to_data)

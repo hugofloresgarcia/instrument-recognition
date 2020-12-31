@@ -64,7 +64,6 @@ class Model(pl.LightningModule):
         obj.hparams = hparams
         return obj
 
-
     def forward(self, x):
         # input should be (batch, sequence, embedding)
         assert x.ndim == 3

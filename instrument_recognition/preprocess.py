@@ -5,8 +5,6 @@ import torch
 import tqdm
 import numpy as np
 
-from instrument_recognition.models.timefreq import Melspectrogram
-from instrument_recognition.models.torchopenl3 import OpenL3Embedding
 from instrument_recognition.datasets import load_datamodule, debatch
 from instrument_recognition import utils
 

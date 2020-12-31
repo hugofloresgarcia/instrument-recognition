@@ -34,12 +34,13 @@ def split(a, n):
 class InstrumentDetectionTask(pl.LightningModule):
 
     def __init__(self, model, datamodule, 
-                 max_epochs,
-                 learning_rate=0.0003,
-                 weighted_cross_entropy=True, 
-                 mixup=False, mixup_alpha=0.2,
-                 log_epoch_metrics=True):
+                 max_epochs: int = 100,
+                 learning_rate: float = 0.0003,
+                 weighted_cross_entropy: bool = True, 
+                 mixup: bool = False, mixup_alpha: float = 0.2,
+                 log_epoch_metrics: bool = True):
         super().__init__()
+        self.save_hyperparameters()
         self.max_epochs = max_epochs
         self.weighted_cross_entropy = weighted_cross_entropy
         self.mixup = mixup
@@ -61,11 +62,26 @@ class InstrumentDetectionTask(pl.LightningModule):
             self.class_weights = None
 
         self.model = model
-        # self.model.log_layers = ['model.' + l for l in self.model.log_layers]
 
-        # register forward hooks for model's logging layers
-        # self.fwd_hooks = OrderedDict()
-        # self.register_all_hooks()
+    @classmethod
+    def from_hparams(cls, model, datamodule, hparams):
+        obj = cls.__init__(model, datamodule,
+                           learning_rate=hparams.learning_rate, 
+                           weighted_cross_entropy=hparams.weighted_cross_entropy, 
+                           mixup=hparams.mixup,
+                           mixup_alpha=hparams.mixup_alpha, 
+                           log_epoch_metrics=hparams.log_epoch_metrics)
+        obj.hparams = hparams
+        return obj
+    
+    def add_argparse_args(cls, parent_parser):
+        parser = parent_parser
+        parser.add_argument('--learning_rate', type=float, default=0.0003)
+        parser.add_argument('--weighted_cross_entropy', type=bool, default=True)
+        parser.add_argument('--mixup', type=bool, default=True)
+        parser.add_argument('--mixup_alpha', type=float, default=0.2)
+        parser.add_argument('--log_epoch_metrics', type=bool, default=True)
+        return parser
 
     def batch_detach(self, batch):
         for i, item in enumerate(batch):
@@ -126,21 +142,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         return dict(loss=loss, y=y.detach(), probits=probits.detach(),
                     yhat=yhat.detach(), X=X.detach())
 
-    def _ensemble_main_step(self, batch, batch_idx, train=False):
-        """" may not need this anymore
-        """
-        if self.model.is_ensemble:
-            # split the batch into self.num_members
-            batch = split(batch, self.num_members)
-            result_list = [self._main_step(subbatch, batch_idx, train=True) for subbatch in batch]
-            # average everything
-            result = {}
-            for key in result[0]:
-                result[key] = torch.stack([r[key] for r in result_list]).mean(dim=0)
-        else:
-            result = self._main_step(batch, batch_idx, train=True)
-        return result
-
     def training_step(self, batch, batch_idx):
         result = self._main_step(batch, batch_idx, train=True)
 
@@ -165,10 +166,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         # update the batch with the result 
         batch.update(result)
 
-        # # log layers defined by model
-        # for layer in self.model.log_layers:
-        #     self.log_layer_io(layer)
-
         # pick and log sample audio
         if batch_idx % 100 == 0:
             self.log_random_sample(batch, title='val-sample')
@@ -186,10 +183,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         result = self._main_step(batch,batch_idx)
         # update the batch with the result 
         batch.update(result)
-
-        # # log layers defined by model
-        # for layer in self.model.log_layers:
-        #     self.log_layer_io(layer)
 
         # pick and log sample audio
         if batch_idx % 100 == 0:
@@ -245,21 +238,21 @@ class InstrumentDetectionTask(pl.LightningModule):
         ece = um.ece(y, probits, num_bins=30)
         self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
-#         if prefix == 'test':
-#             print('computing reliability')
-#             reliability_fig = um.reliability_diagram(probits, y)
+        if prefix == 'test':
+            print('computing reliability')
+            reliability_fig = um.reliability_diagram(probits, y)
 
-#             log_dir = self.log_dir
-#             confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
-#             confidences = np.array(confidences)
-#             accuracies = np.array(accuracies)
-#             xbins = np.array(xbins)
-#             np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
-#             np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
-#             np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
+            log_dir = self.log_dir
+            confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
+            confidences = np.array(confidences)
+            accuracies = np.array(accuracies)
+            xbins = np.array(xbins)
+            np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
+            np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
+            np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
 
-#             self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
-#             print('done :)')
+            self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
+            print('done :)')
 
     def log_sklearn_metrics(self, yhat, y, prefix='val'):
         y = y.detach().cpu().numpy()
