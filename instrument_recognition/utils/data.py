@@ -54,19 +54,8 @@ def load_dict_yaml(path_to_yaml):
         d = yaml.load(f, allow_pickle=True)
     return d
 
-def remove_dead_entries(metadata):
-    new_m = []
-    for e in metadata:
-        if 'path_to_audio' not in e:
-            print('this entry is missing a path to audio')
-            print(e)
-            continue
-        if isinstance(e['path_to_audio'], str):
-            new_m.append(e)
-    return new_m
-
 def glob_metadata_entries(path_to_dataset, pattern='**/*.yaml'):
-    """ reads all json files recursively and loads them into
+    """ reads all yaml files recursively and loads them into
     a list of dicts
     """ 
     pattern = os.path.join(path_to_dataset, pattern)

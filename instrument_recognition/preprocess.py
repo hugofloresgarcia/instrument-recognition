@@ -5,11 +5,20 @@ import torch
 import tqdm
 import numpy as np
 
+import torchopenl3
+from torchopenl3 import OpenL3Embedding
+
 from instrument_recognition.datasets import load_datamodule, debatch
 from instrument_recognition import utils
 
 PATH_TO_DATA = '/home/hugo/data/mono_music_sed/mdb/AUDIO/'
 CUDA_DEVICE = 0
+
+# TODO: need to add a from_array, from_file, etc.
+# TODO: need to a preprocess(dataset_name) 
+# from /data/ to /cache/
+# TODO: should you save new metadata entries in the cache too? I don't think so. 
+# TODO: maybe each dataset entry has a UUID and we save according to that
 
 # define our preprocess callables and assign them a path
 preprocessors = [

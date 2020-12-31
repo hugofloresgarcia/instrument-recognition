@@ -54,9 +54,9 @@ if __name__ == "__main__":
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--version', type=int, required=True)
 
-    parser.add_argument('--gpuid', type=utils.train.noneint, default=0)
+    parser.add_argument('--gpuid', type=utils.parser_types.noneint, default=0)
     parser.add_argument('--max_epochs', type=int, default=100)
-    parser.add_argument('--test', type=utils.train.str2bool, default=False)
+    parser.add_argument('--test', type=utils.parser_types.str2bool, default=False)
 
     parser = Model.add_model_specific_args(parser)
     parser = BaseDataModule.add_argparse_args(parser)

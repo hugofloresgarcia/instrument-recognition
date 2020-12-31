@@ -144,3 +144,7 @@ instrument_recognition/weights/
 instrument_recognition/logs/
 
 instrument_recognition/notebooks/logs
+
+cache/
+data/
+test-tubes/

@@ -22,6 +22,12 @@ unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'picco
                      'glockenspiel', 'tambourine', 'timpani', 'snare drum', 'clarinet section',
                       'flute section', 'tenor saxophone', 'trumpet section']
 
+# TODO: need to add partition scripts for mdb-synthetic-mono, mdb-synthethic-poly, openmic-2018
+# should save to /data/
+# TODO: the synthetic mdb should consist of 10s sequences and stuff. you should make it using scaper
+# and add all required effects to the train partition 
+# TODO: make sure to save partition maps in /instrument_recognition/assets/
+
 def _check_audio_types(audio):
     assert audio.ndim == 1, "audio must be mono"
     assert isinstance(audio, np.ndarray)
