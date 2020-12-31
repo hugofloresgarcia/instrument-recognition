@@ -19,20 +19,15 @@ setup_args = dict(
 )
 
 install_requires = [
-    'medleydb',
     'torch',
     'pytorch_lightning',
     'numpy',
     'pandas',
     'matplotlib',
-    'tensorflow==1.14',
-    'openl3',
     'test-tube',
     'tensorboard==2.2',
-    'torchaudio',
-    'torchvision',
     'tqdm', 
-    'soundfile'
+    'soundfile',
     'librosa', 
     'sox']
 
