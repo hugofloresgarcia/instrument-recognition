@@ -1,22 +1,18 @@
 import os
+from pathlib import Path
 
 import numpy as np 
 import medleydb as mdb
+import librosa
 import soundfile as sf
 import tqdm
+import uuid
 
-from instrument_recognition.utils.audio import load_audio_file
+import audio_utils as au
+
+import instrument_recognition as ir
+import instrument_recognition.utils as utils
 from instrument_recognition.utils.effects import augment_from_array_to_array, trim_silence
-
-RANDOM_SEED = 20
-TEST_SIZE = 0.15
-
-CHUNK_SIZE = 1
-
-SR = 48000
-HOP_SIZE = 0.25 
-AUGMENT_TRAIN_SET = True
-PATH_TO_OUTPUT = f'/home/hugo/data/mono_music_sed/mdb/AUDIO/'
 
 unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal',
                      'glockenspiel', 'tambourine', 'timpani', 'snare drum', 'clarinet section',
@@ -27,119 +23,38 @@ unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'picco
 # TODO: the synthetic mdb should consist of 10s sequences and stuff. you should make it using scaper
 # and add all required effects to the train partition 
 # TODO: make sure to save partition maps in /instrument_recognition/assets/
+# TODO: also, incoroporate your new fly packages, torchopenl3 and audio utils
 
-def _check_audio_types(audio):
-    assert audio.ndim == 1, "audio must be mono"
-    assert isinstance(audio, np.ndarray)
+def create_dataset_entry(entry_path, audio_format, metadata_format, label, 
+                         start_time, end_time, sr, effect_params, **kwargs):
+    "dict wrapper with required fiels"
+    return dict(entry_path=entry_path, audio_format=audio_format, metadata_format=metadata_format, 
+                label=label, start_time=start_time, end_time=end_time, sr=sr, effect_params=effect_params, **kwargs)
 
-def get_audio_chunk(audio, sr, start_time, chunk_size):
-    """ given MONO audio 1d array, get a chunk of that 
-    array determined by start_time (in seconds), chunk_size (in seconds)
-    pad with zeros if necessary
-    """
-    _check_audio_types(audio)
+def save_dataset_entry(audio: np.ndarray, sr: int, audio_format: str, dataset: str, 
+                      partition_key: str, label: str, filename: str, start_time: float, 
+                      end_time: float, effect_params: dict, 
+                      **kwargs): 
+    # define a path for our dataset entry 
+    entry_path = Path(dataset) / partition_key / 'foreground' / label / filename
+    entry_path_absolute = Path(ir.core.DATA_DIR) / entry_path
 
-    duration = audio.shape[-1] / sr
+    # create a metadata dict
+    metadata = create_dataset_entry(entry_path=entry_path, audio_format=audio_format, metadata_format=metadata_format, 
+                                    label=label, start_time=start_time, end_time=end_time, sr=sr, effect_params=effect_params, **kwargs)
 
-    start_idx = int(start_time * sr)
+    # save metadata
+    utils.data.save_yaml(metadata, entry_path)
 
-    end_time = start_time + chunk_size 
-    end_time = min([end_time, duration])
+    # save audio file
+    au.write_audio_file(audio, path_to_audio=entry_path_absolute, sample_rate=sr, 
+                                 audio_format=audio_format, exist_ok=True)
 
-    end_idx = int(end_time * sr)
-
-    chunked_audio = audio[start_idx:end_idx]
-
-    if not len(audio) / sr == chunk_size * sr:
-        chunked_audio = utils.audio.zero_pad(chunked_audio, sr * chunk_size)
-    return chunked_audio
-
-def save_windowed_audio_events(audio, sr, chunk_size, hop_size, base_chunk_name, 
-                             label, path_to_output, metadata_extras, augment=True):
-    """ this function will chunk a monophonic audio array 
-    into chunks as determined by chunk_size and hop_size. 
-    The output audio file will be saved to a foreground folder, scaper style, 
-    under a subdirectory with a name determined by label. 
-    Besides the output audio file, it will create a .yaml file with metadata
-    for each corresponding audio file
-    args:
-        audio (np.ndarray): audio arrayshape (samples,)
-        sr (int): sample rate
-        chunk_size (float): chunk size, in seconds, to cut audio into
-        hop_size (float): hop size, in seconds, to window audio
-        base_chunk_name (str): base name for the output audio chunk file. The format for 
-            the saved audio chunks is f"{base_chunk_name}-{start_time}"
-        label (str): label for this audio example. 
-        path_to_output (str): base path to save this example
-        metadata_extras (dict): adds these extra entries to each metadata dict
-    """
-    _check_audio_types(audio)
-
-    # determine how many chunk_size chunks we can get out of the audio array
-    audio_len = len(audio)
-    n_chunks = int(np.ceil(audio_len/(chunk_size*sr))) # use ceil because we can zero pad
-
-    start_times = np.arange(0, n_chunks, hop_size)
-
-    def save_chunk(start_time):
-        # round start time bc of floating pt errors
-        start_time = np.around(start_time, 4)
-
-        # get current audio_chunk
-        audio_chunk = get_audio_chunk(audio, sr, start_time, chunk_size)
-
-        audio_chunk_name = base_chunk_name + f'/{start_time}.wav'
-        audio_chunk_path = os.path.join(path_to_output, 
-                                        f'{label}', 
-                                        audio_chunk_name)
-        
-        if augment:
-            audio_chunk, effect_params = augment_from_array_to_array(audio_chunk, sr)
-        else:
-            effect_params = []
-
-        # make path for metadata
-        chunk_metadata_path = audio_chunk_path.replace('.wav', '.yaml')
-        
-        os.makedirs(os.path.dirname(audio_chunk_path), exist_ok=True)
-
-        # make a metadata entry
-        entry = dict()
-        entry.update(metadata_extras)
-        entry.update(dict(
-            path_to_dataset=path_to_output,
-            path_to_metadata=chunk_metadata_path, 
-            path_to_audio=audio_chunk_path,
-            label=label,
-            chunk_size=chunk_size, 
-            start_time=float(start_time), 
-            sr=sr, 
-            effect_params=effect_params))
-
-        # if either of these don't exist, create both
-        if (not os.path.exists(chunk_metadata_path)) \
-            or (not os.path.exists(audio_chunk_path)):
-#             print(f'\t saving {chunk_metadata_path}', sep='', end='', flush=True)
-
-            sf.write(audio_chunk_path, audio_chunk, sr, 'PCM_24')
-            utils.data.save_dict_yaml(entry, chunk_metadata_path)
-        else:
-            pass
-            # print(f'already found: {audio_chunk_path} and {chunk_metadata_path}')
-        return entry
-
-    for start_time in start_times:
-        save_chunk(start_time)
-
-    # with concurrent.futures.ThreadPoolExecutor(max_workers) as p:
-    #     p.map(save_chunk, start_times)
-
-if __name__ == "__main__":
-
+def medleydb_make_partition_map(test_size, random_seed):
     # the first thing to do is to partition the MDB track IDs and stem IDs into only the ones we will use. 
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
-    splits = mdb.utils.artist_conditional_split(test_size=TEST_SIZE, num_splits=1, 
-                                                random_state=RANDOM_SEED)[0]
+    splits = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
+                                                random_state=random_seed)[0]
     partition_map = {}
 
     for mtrack in mtrack_generator:
@@ -169,10 +84,8 @@ if __name__ == "__main__":
                 continue
 
             # append the stem with it's corresponding info
-            stem_info = dict(track_id=mtrack.track_id, stem_idx=stem.stem_idx, 
-                            label=label, 
-                            artist_id=mtrack.track_id.split('_')[0], 
-                            path_to_audio=stem.audio_path, 
+            stem_info = dict(track_id=mtrack.track_id, stem_idx=stem.stem_idx, label=label, 
+                            artist_id=mtrack.track_id.split('_')[0], path_to_audio=stem.audio_path, 
                             base_chunk_name=f'{mtrack.track_id}-{stem_id}-{label}')
             partition_list.append(stem_info)
 
@@ -191,25 +104,48 @@ if __name__ == "__main__":
     print(len(utils.data.get_classlist(partition_map['train'])))
     print(len(utils.data.get_classlist(partition_map['test'])))
 
-    # now, save and do the magic
-    for partition_key, metadata in partition_map.items():
-        augment = True if partition_key == 'train' else False
+    return partition_map
+
+def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
+    for partition_key, records in partition_map.items():
+        # only augment files in the train partition
+        augment = partition_key == 'train'
 
         def split_and_augment(entry):
-            # try:
             path_to_audio = entry['path_to_audio']
             base_chunk_name = entry['base_chunk_name']
             label = entry['label']
-            output_path = os.path.join(PATH_TO_OUTPUT, partition_key)
 
-            audio = load_audio_file(path_to_audio, SR)
-            # trim silence
-            audio = trim_silence(audio, SR, min_silence_duration=0.3)
-
-            save_windowed_audio_events(audio=audio, sr=SR, chunk_size=CHUNK_SIZE, 
-                                    hop_size=HOP_SIZE, base_chunk_name=base_chunk_name, 
-                                    label=label, path_to_output=output_path, 
-                                    metadata_extras=entry, augment=augment)
+            audio = load_audio_file(path_to_audio, target_sr)
+            
+            timestamps = au.split_on_silence(audio, top_db=45)
+            
+            for ts in timestamps:
+                audio_seg = au.get_audio_from_timestamp(audio, ts)
+                
+                # save a new dataset entry
+                save_dataset_entry(audio_seg, sr=target_sr, audio_format=audio_format, dataset=dataset, 
+                                   partition_key=partition_key, label=label, 
+                                   filename=f'{base_chunk_name}-{start_time}-{end_time}'',
+                                   start_time=ts[0], end_time=ts[1], effect_params=effect_params)
+                
 
         # DO IT IN PARALLEL
-        tqdm.contrib.concurrent.process_map(split_and_augment, metadata)
+        tqdm.contrib.concurrent.process_map(split_and_augment, records)
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--dataset', type=str, required=True)
+    
+    parser.add_argument('--audio_format', type=str, default='wav')
+    parser.add_argument('--test_size', type=float, default=0.15)
+    parser.add_argument('--seed', type=int, default=ir.RANDOM_SEED)
+    parser.add_argument('--sample_rate', type=int, default=ir.SAMPLE_RATE)
+    
+    args = parser.parse_args()
+
+    partition = medleydb_make_partition_map(test_size=args.test_size, random_seed=args.seed)
+    split_on_silence_and_save(partition, args.sample_rate, args.dataset, args.audio_format)

@@ -2,10 +2,22 @@ import os
 import json
 import glob
 import yaml
+from pathlib import Path
 
 import pandas as pd 
 import tqdm.contrib.concurrent
 from sklearn.model_selection import train_test_split
+
+def _add_file_format_to_filename(path: str, file_format: str):
+    if Path(path).suffix != file_format:
+        path = path + file_format
+    return path
+
+# TODO: implement me
+def jams_to_matrix(jams_data, num_time_steps):
+    """returns a one hot matrix  shape (sequence, num_classes)
+    """
+    raise NotImplementedError
 
 def get_abspath(path):
     return os.path.abspath(os.path.expanduser(path))
@@ -32,24 +44,26 @@ def save_metadata_csv(metadata, path_to_metadata):
 def get_path_to_metadata(path_to_dataset):
     return os.path.join(path_to_dataset, 'metadata.csv')
 
-def save_dict_json(d, save_path):
+def save_json(d, save_path):
     """ save a dictionary using json
     """
+    save_path = _add_file_format_to_filename(save_path, 'json')
     with open(save_path, 'w') as f:
         json.dump(d, f)
     return 
 
-def load_dict_json(path_to_json):
-    with open(path_to_json, 'r') as f:
-        d = json.load(f)
-    return d
-
-def save_dict_yaml(d, save_path):
+def save_yaml(d, save_path):
+    save_path = _add_file_format_to_filename(save_path, 'yaml')
     with open(save_path, 'w') as f:
         yaml.dump(d, f)
     return 
 
-def load_dict_yaml(path_to_yaml):
+def load_json(path_to_json):
+    with open(path_to_json, 'r') as f:
+        d = json.load(f)
+    return d
+
+def load_yaml(path_to_yaml):
     with open(path_to_yaml, 'r') as f:
         d = yaml.load(f, allow_pickle=True)
     return d
@@ -61,9 +75,9 @@ def glob_metadata_entries(path_to_dataset, pattern='**/*.yaml'):
     pattern = os.path.join(path_to_dataset, pattern)
     filepaths = glob.glob(pattern, recursive=True)
 
-    metadata = tqdm.contrib.concurrent.process_map(load_dict_yaml, filepaths, max_workers=20, chunksize=20)
+    metadata = tqdm.contrib.concurrent.process_map(load_yaml, filepaths, max_workers=20, chunksize=20)
 
-    # metadata = [load_dict_json(path) for path in filepath_iterator]
+    # metadata = [load_json(path) for path in filepath_iterator]
 
     return metadata
 
