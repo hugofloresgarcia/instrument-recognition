@@ -145,6 +145,10 @@ instrument_recognition/logs/
 
 instrument_recognition/notebooks/logs
 
-cache/
-data/
+cache/*
+!cache/.gitkeep
+data/*
+!data/.gitkeep
+test-tubes/*
+!test-tubes/.gitkeep
 test-tubes/
