@@ -18,13 +18,6 @@ unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'picco
                      'glockenspiel', 'tambourine', 'timpani', 'snare drum', 'clarinet section',
                       'flute section', 'tenor saxophone', 'trumpet section']
 
-# TODO: need to add partition scripts for mdb-synthetic-mono, mdb-synthethic-poly, openmic-2018
-# should save to /data/
-# TODO: the synthetic mdb should consist of 10s sequences and stuff. you should make it using scaper
-# and add all required effects to the train partition 
-# TODO: make sure to save partition maps in /instrument_recognition/assets/
-# TODO: also, incoroporate your new fly packages, torchopenl3 and audio utils
-
 def create_dataset_entry(entry_path, audio_format, metadata_format, label, 
                          start_time, end_time, sr, effect_params, **kwargs):
     "dict wrapper with required fiels"
@@ -106,6 +99,10 @@ def medleydb_make_partition_map(test_size, random_seed):
 
     return partition_map
 
+def save_partition_map(partition_map, name):
+    save_path = Path(ir.core.ASSETS_DIR) / f'{name}-partition_map'
+    utils.data.save_json(partition_map, save_path)
+
 def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
     for partition_key, records in partition_map.items():
         # only augment files in the train partition
@@ -147,5 +144,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
+    # make partition map, save to assets dir
     partition = medleydb_make_partition_map(test_size=args.test_size, random_seed=args.seed)
+    save_partition_map(partition, args.dataset)
     split_on_silence_and_save(partition, args.sample_rate, args.dataset, args.audio_format)
