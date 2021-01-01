@@ -9,12 +9,6 @@ __pycache__/
 # weight paths 
 **/modules/weights/**
 
-# checkpoints / test tubes
-/test-tubes/
-
-# data
-./data/
-
 # Distribution / packaging
 .Python
 build/
