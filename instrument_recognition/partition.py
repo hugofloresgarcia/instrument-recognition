@@ -32,7 +32,7 @@ def save_dataset_entry(audio: np.ndarray, sr: int, audio_format: str, dataset: s
                                     label=label, start_time=start_time, end_time=end_time, sr=sr, effect_params=effect_params, **kwargs)
 
     # save metadata
-    utils.data.save_yaml(metadata, entry_path)
+    utils.data.save_yaml(metadata, entry_path_absolute)
 
     # save audio file
     au.io.write_audio_file(audio=audio, path_to_audio=entry_path_absolute, sample_rate=sr, 
