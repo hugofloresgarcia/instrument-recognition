@@ -1,18 +1,13 @@
-import os
 from pathlib import Path
 
-import numpy as np 
+import numpy as np
 import medleydb as mdb
-import librosa
-import soundfile as sf
 import tqdm
-import uuid
 
 import audio_utils as au
 
 import instrument_recognition as ir
 import instrument_recognition.utils as utils
-from instrument_recognition.utils.effects import augment_from_array_to_array, trim_silence
 
 unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal',
                      'glockenspiel', 'tambourine', 'timpani', 'snare drum', 'clarinet section',
@@ -33,18 +28,18 @@ def save_dataset_entry(audio: np.ndarray, sr: int, audio_format: str, dataset: s
     entry_path_absolute = Path(ir.core.DATA_DIR) / entry_path
 
     # create a metadata dict
-    metadata = create_dataset_entry(entry_path=entry_path, audio_format=audio_format, metadata_format=metadata_format, 
+    metadata = create_dataset_entry(entry_path=entry_path, audio_format=audio_format, metadata_format='yaml', 
                                     label=label, start_time=start_time, end_time=end_time, sr=sr, effect_params=effect_params, **kwargs)
 
     # save metadata
     utils.data.save_yaml(metadata, entry_path)
 
     # save audio file
-    au.write_audio_file(audio, path_to_audio=entry_path_absolute, sample_rate=sr, 
+    au.io.write_audio_file(audio=audio, path_to_audio=entry_path_absolute, sample_rate=sr, 
                                  audio_format=audio_format, exist_ok=True)
 
 def medleydb_make_partition_map(test_size, random_seed):
-    # the first thing to do is to partition the MDB track IDs and stem IDs into only the ones we will use. 
+    # the first thing to do is to partition the MDB track IDs and stem IDs into only the ones we will use.
     mtrack_generator = mdb.load_all_multitracks(['V1', 'V2'])
     splits = mdb.utils.artist_conditional_split(test_size=test_size, num_splits=1, 
                                                 random_state=random_seed)[0]
@@ -82,7 +77,6 @@ def medleydb_make_partition_map(test_size, random_seed):
                             base_chunk_name=f'{mtrack.track_id}-{stem_id}-{label}')
             partition_list.append(stem_info)
 
-
     import instrument_recognition.utils as utils
     # get the unique set of classes for both partition
     classlists = {k: utils.data.get_classlist(metadata) for k, metadata in partition_map.items()}
@@ -94,8 +88,9 @@ def medleydb_make_partition_map(test_size, random_seed):
     for partition_key, metadata in partition_map.items():
         partition_map[partition_key] = [e for e in metadata if e['label'] in  filtered_classes]
 
-    print(len(utils.data.get_classlist(partition_map['train'])))
-    print(len(utils.data.get_classlist(partition_map['test'])))
+    print(f'created a partition map with the following classes:\n{filtered_classes}')
+    print(f'number of tracks in train set: {len(partition_map["train"])}')
+    print(f'number of tracks in test set: {len(partition_map["test"])}')
 
     return partition_map
 
@@ -108,27 +103,29 @@ def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
         # only augment files in the train partition
         augment = partition_key == 'train'
 
-        def split_and_augment(entry):
+        def _split_and_save(entry):
             path_to_audio = entry['path_to_audio']
             base_chunk_name = entry['base_chunk_name']
             label = entry['label']
 
-            audio = load_audio_file(path_to_audio, target_sr)
-            
-            timestamps = au.split_on_silence(audio, top_db=45)
-            
-            for ts in timestamps:
-                audio_seg = au.get_audio_from_timestamp(audio, ts)
+            audio = au.io.load_audio_file(path_to_audio, target_sr)
+            timestamps = au.split_on_silence(audio, target_sr, top_db=45, min_silence_duration=0.5)
+    
+            tspbar = tqdm.tqdm(timestamps)
+            for ts in tspbar:
+                audio_seg = au.get_audio_from_timestamp(audio, sr=target_sr, timestamp=ts)
+                start_time, end_time = ts
                 
                 # save a new dataset entry
                 save_dataset_entry(audio_seg, sr=target_sr, audio_format=audio_format, dataset=dataset, 
-                                   partition_key=partition_key, label=label, 
-                                   filename=f'{base_chunk_name}-{start_time}-{end_time}'',
-                                   start_time=ts[0], end_time=ts[1], effect_params=effect_params)
-                
+                                    partition_key=partition_key, label=label, 
+                                    filename=f'{base_chunk_name}-{start_time}-{end_time}',
+                                    start_time=ts[0], end_time=ts[1], effect_params=None)
 
-        # DO IT IN PARALLEL
-        tqdm.contrib.concurrent.process_map(split_and_augment, records)
+        records_pb = tqdm.tqdm(records)
+        for record in records_pb:
+            records_pb.set_description(f'processing {record["path_to_audio"].split("/")[-1]}')
+            _split_and_save(record)
 
 if __name__ == "__main__":
     import argparse

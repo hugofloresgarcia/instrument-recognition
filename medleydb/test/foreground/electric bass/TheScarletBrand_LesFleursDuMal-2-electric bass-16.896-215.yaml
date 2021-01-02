@@ -1,0 +1,32 @@
+audio_format: wav
+effect_params: null
+end_time: !!python/object/apply:numpy.core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  P3yGXQHyakA=
+entry_path: !!python/object/apply:pathlib.PosixPath
+- medleydb
+- test
+- foreground
+- electric bass
+- TheScarletBrand_LesFleursDuMal-2-electric bass-16.896-215.56266666666667
+label: electric bass
+metadata_format: yaml
+sr: 48000
+start_time: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  TDeJQWDlMEA=

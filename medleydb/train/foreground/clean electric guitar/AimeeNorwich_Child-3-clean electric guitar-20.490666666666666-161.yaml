@@ -1,0 +1,32 @@
+audio_format: wav
+effect_params: null
+end_time: !!python/object/apply:numpy.core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  YleA3GsuZEA=
+entry_path: !!python/object/apply:pathlib.PosixPath
+- medleydb
+- train
+- foreground
+- clean electric guitar
+- AimeeNorwich_Child-3-clean electric guitar-20.490666666666666-161.45066666666668
+label: clean electric guitar
+metadata_format: yaml
+sr: 48000
+start_time: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  F5KmVJx9NEA=

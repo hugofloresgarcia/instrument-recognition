@@ -1,0 +1,32 @@
+audio_format: wav
+effect_params: null
+end_time: !!python/object/apply:numpy.core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  eekmMQiscEA=
+entry_path: !!python/object/apply:pathlib.PosixPath
+- medleydb
+- test
+- foreground
+- auxiliary percussion
+- SweetLights_YouLetMeDown-13-auxiliary percussion-265.376-266.752
+label: auxiliary percussion
+metadata_format: yaml
+sr: 48000
+start_time: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  vHSTGASWcEA=

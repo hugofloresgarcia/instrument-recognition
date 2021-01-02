@@ -1,0 +1,32 @@
+audio_format: wav
+effect_params: null
+end_time: !!python/object/apply:numpy.core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  cT0K16NwaUA=
+entry_path: !!python/object/apply:pathlib.PosixPath
+- medleydb
+- test
+- foreground
+- electric bass
+- SweetLights_YouLetMeDown-2-electric bass-124.71466666666667-203.52
+label: electric bass
+metadata_format: yaml
+sr: 48000
+start_time: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  +zdCGb0tX0A=

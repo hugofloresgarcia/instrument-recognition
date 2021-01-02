@@ -1,0 +1,32 @@
+audio_format: wav
+effect_params: null
+end_time: !!python/object/apply:numpy.core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  A5020GkDZUA=
+entry_path: !!python/object/apply:pathlib.PosixPath
+- medleydb
+- test
+- foreground
+- male singer
+- AClassicEducation_NightOwl-13-male singer-133.06666666666666-168.10666666666665
+label: male singer
+metadata_format: yaml
+sr: 48000
+start_time: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  IiIiIiKiYEA=

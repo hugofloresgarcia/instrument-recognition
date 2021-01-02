@@ -1,0 +1,32 @@
+audio_format: wav
+effect_params: null
+end_time: !!python/object/apply:numpy.core.multiarray.scalar
+- &id001 !!python/object/apply:numpy.dtype
+  args:
+  - f8
+  - false
+  - true
+  state: !!python/tuple
+  - 3
+  - <
+  - null
+  - null
+  - null
+  - -1
+  - -1
+  - 0
+- !!binary |
+  ERERERGRaEA=
+entry_path: !!python/object/apply:pathlib.PosixPath
+- medleydb
+- test
+- foreground
+- clean electric guitar
+- StevenClark_Bounty-1-clean electric guitar-193.74933333333334-196.53333333333333
+label: clean electric guitar
+metadata_format: yaml
+sr: 48000
+start_time: !!python/object/apply:numpy.core.multiarray.scalar
+- *id001
+- !!binary |
+  BQ/mifo3aEA=

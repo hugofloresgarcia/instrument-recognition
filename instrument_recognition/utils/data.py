@@ -9,8 +9,11 @@ import tqdm.contrib.concurrent
 from sklearn.model_selection import train_test_split
 
 def _add_file_format_to_filename(path: str, file_format: str):
+    if '.' not in file_format:
+        file_format = f'.{file_format}'
+
     if Path(path).suffix != file_format:
-        path = path + file_format
+        path = path.with_suffix(file_format)
     return path
 
 # TODO: implement me
@@ -47,16 +50,16 @@ def get_path_to_metadata(path_to_dataset):
 def save_json(d, save_path):
     """ save a dictionary using json
     """
+    os.makedirs(Path(save_path).parent, exist_ok=True)
     save_path = _add_file_format_to_filename(save_path, 'json')
     with open(save_path, 'w') as f:
         json.dump(d, f)
-    return 
 
 def save_yaml(d, save_path):
+    os.makedirs(Path(save_path).parent, exist_ok=True)
     save_path = _add_file_format_to_filename(save_path, 'yaml')
     with open(save_path, 'w') as f:
         yaml.dump(d, f)
-    return 
 
 def load_json(path_to_json):
     with open(path_to_json, 'r') as f:
