@@ -26,11 +26,13 @@ def augment_from_array_to_array(audio, sr, effect_chain=None):
     
     # for now, assert that audio is mono and convert to sox format
     assert audio.ndim == 1
+    print(audio.shape)
     audio = np.expand_dims(audio, -1)
     tfm_audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
     audio = np.squeeze(audio, axis=-1)
     tfm_audio = utils.audio.zero_pad(tfm_audio, audio.shape[0])
     tfm_audio = tfm_audio[0:audio.shape[0]]
+    print(tfm_audio.shape)
     return tfm_audio, effect_params
 
 def trim_silence(audio, sr, min_silence_duration=0.3):

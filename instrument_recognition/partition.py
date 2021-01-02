@@ -109,18 +109,17 @@ def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
             label = entry['label']
 
             audio = au.io.load_audio_file(path_to_audio, target_sr)
-            timestamps = au.split_on_silence(audio, target_sr, top_db=45, min_silence_duration=0.5)
+
+            audio = au.librosa_input_wrap(audio)
+            audio = utils.effects.trim_silence(audio, target_sr, min_silence_duration=0.5)
+            audio = au.librosa_output_wrap(audio)
+
+            # timestamps = au.split_on_silence(audio, target_sr, top_db=45, min_silence_duration=0.5)
     
-            tspbar = tqdm.tqdm(timestamps)
-            for ts in tspbar:
-                audio_seg = au.get_audio_from_timestamp(audio, sr=target_sr, timestamp=ts)
-                start_time, end_time = ts
-                
-                # save a new dataset entry
-                save_dataset_entry(audio_seg, sr=target_sr, audio_format=audio_format, dataset=dataset, 
-                                    partition_key=partition_key, label=label, 
-                                    filename=f'{base_chunk_name}-{start_time}-{end_time}',
-                                    start_time=ts[0], end_time=ts[1], effect_params=None)
+            save_dataset_entry(audio, sr=target_sr, audio_format=audio_format, dataset=dataset, 
+                                partition_key=partition_key, label=label, 
+                                filename=f'{base_chunk_name}',
+                                start_time=0, end_time=len(audio)/target_sr, effect_params=None)
 
         records_pb = tqdm.tqdm(records)
         for record in records_pb:
