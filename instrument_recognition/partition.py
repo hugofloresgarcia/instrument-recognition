@@ -100,8 +100,6 @@ def save_partition_map(partition_map, name):
 
 def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
     for partition_key, records in partition_map.items():
-        # only augment files in the train partition
-        augment = partition_key == 'train'
 
         def _split_and_save(entry):
             path_to_audio = entry['path_to_audio']
@@ -113,6 +111,9 @@ def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
             audio = au.librosa_input_wrap(audio)
             audio = utils.effects.trim_silence(audio, target_sr, min_silence_duration=0.5)
             audio = au.librosa_output_wrap(audio)
+
+            if au.core._is_zero(audio):
+                return
 
             # timestamps = au.split_on_silence(audio, target_sr, top_db=45, min_silence_duration=0.5)
     
