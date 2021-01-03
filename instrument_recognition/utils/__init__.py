@@ -3,4 +3,4 @@ import instrument_recognition.utils.audio
 import instrument_recognition.utils.effects
 import instrument_recognition.utils.plot
 import instrument_recognition.utils.data
-import instrument_recognition.utils.parser_types
+from instrument_recognition.utils.parser_types import *

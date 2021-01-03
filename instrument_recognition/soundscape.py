@@ -45,7 +45,7 @@ def sample_from_distribution_spec(spec):
 def get_audio_duration(path_to_audio):
     return librosa.core.get_duration(filename=path_to_audio)
 
-def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = True)
+def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = True):
     data_dir = Path(ir.core.DATA_DIR)
 
     ref_db = -45
@@ -153,12 +153,13 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
 
 if __name__ == "__main__":
     import argparse
+    from instrument_recognition import utils
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--dataset', type=str, default='medleydb')
-    parser.add_argument('--monophonic', type=ir.utils.str2bool, default=True)
+    parser.add_argument('--monophonic', type=utils.str2bool, default=True)
 
     args = parser.parse_args()
 
