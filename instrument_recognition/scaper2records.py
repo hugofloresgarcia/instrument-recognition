@@ -33,6 +33,7 @@ def jams_to_records(jam_list):
     for jam in jam_list:
         entry = {}
         entry['path_to_audio'] = get_path_to_audio(jam)
+        entry['duration'] = jam.file_metadata.duration
         entry['events'] = get_all_events(jam)
         entry['path_to_jams'] = get_path_to_jams_file(jam)
         records.append(entry)
