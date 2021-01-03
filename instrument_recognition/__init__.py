@@ -1,1 +1,9 @@
+import instrument_recognition.utils
+import instrument_recognition.datasets
+import instrument_recognition.preprocess
+import instrument_recognition.scaper2records
+import instrument_recognition.soundscape
+import instrument_recognition.task
+import instrument_recognition.train
+import instrument_recognition.models
 from .core import *

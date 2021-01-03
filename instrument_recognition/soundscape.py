@@ -10,13 +10,6 @@ import tqdm
 
 import instrument_recognition as ir
 
-# TODO: need to add partition scripts for mdb-synthetic-mono, mdb-synthethic-poly, openmic-2018
-# should save to /data/
-# TODO: the synthetic mdb should consist of 10s sequences and stuff. you should make it using scaper
-# and add all required effects to the train partition 
-# TODO: make sure to save partition maps in /instrument_recognition/assets/
-# TODO: also, incoroporate your new fly packages, torchopenl3 and audio utils
-
 def get_randn(mu, std, min=None, max=None):
     """ get a random float, sampled from a normal 
     distribution with mu and std, clipped between min and max
@@ -45,15 +38,12 @@ def sample_from_distribution_spec(spec):
 def get_audio_duration(path_to_audio):
     return librosa.core.get_duration(filename=path_to_audio)
 
-def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = True):
-    data_dir = Path(ir.core.DATA_DIR)
-
+# NOTE: min_events and max_events will only do something if monophonic = False. Otherwise, 
+# the number of events is determined by the length of the previously sampled events. 
+def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = True, 
+                     min_events: int = 1, max_events: int = 9, duration: float = 10.0):
     ref_db = -45
-    duration = 10.0
-
-    min_events = 1
-    max_events = 9
-
+    data_dir = Path(ir.core.DATA_DIR)
     seed = ir.core.RANDOM_SEED
 
     # lets go
@@ -160,7 +150,11 @@ if __name__ == "__main__":
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--dataset', type=str, default='medleydb')
     parser.add_argument('--monophonic', type=utils.str2bool, default=True)
+    parser.add_argument('--min_events', type=int, default=1)
+    parser.add_argument('--max_events', type=int, default=9)
+    parser.add_argument('--duration', type=float, default=10.0)
 
     args = parser.parse_args()
 
-    make_soundscapes(name=args.name, dataset=args.dataset, monophonic=args.monophonic)
+    make_soundscapes(name=args.name, dataset=args.dataset, monophonic=args.monophonic, 
+                     min_events=args.min_events, max_events=args.max_events, duration=args.duration)

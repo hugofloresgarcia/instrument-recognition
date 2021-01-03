@@ -156,28 +156,6 @@ class BaseDataset(torch.utils.data.Dataset):
     def get_onehot(self, label):
         return np.array([1 if l == label else 0 for l in self.classes])
 
-class CollateBatches:
-    """ callable class to collate batches
-    """
-
-    def __call__(self, batch):
-        """
-        collate a batch of dataset samples
-        """
-        # print(batch)
-        X = [e['X'] for e in batch]
-        y = [e['y'] for e in batch]
-
-        X = torch.stack(X)
-        y = torch.stack(y).view(-1)
-
-        # add the rest of all keys
-        data = {key: [entry[key] for entry in batch] for key in batch[0]}
-
-        data['X'] = X
-        data['y'] = y
-        return data
-
 class BaseDataModule(pl.LightningDataModule):
 
     def __init__(self, path_to_data, batch_size=1, num_workers=2, 
@@ -236,3 +214,25 @@ class BaseDataModule(pl.LightningDataModule):
         return DataLoader(self.test_data, batch_size=self.batch_size,
             collate_fn=self.collate_fn,
              shuffle=False, num_workers=self.num_workers)
+
+class CollateBatches:
+    """ callable class to collate batches
+    """
+
+    def __call__(self, batch):
+        """
+        collate a batch of dataset samples
+        """
+        # print(batch)
+        X = [e['X'] for e in batch]
+        y = [e['y'] for e in batch]
+
+        X = torch.stack(X)
+        y = torch.stack(y).view(-1)
+
+        # add the rest of all keys
+        data = {key: [entry[key] for entry in batch] for key in batch[0]}
+
+        data['X'] = X
+        data['y'] = y
+        return data

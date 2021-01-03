@@ -13,7 +13,7 @@ def _add_file_format_to_filename(path: str, file_format: str):
         file_format = f'.{file_format}'
 
     if Path(path).suffix != file_format:
-        path = path.with_suffix(file_format)
+        path = str(Path(path).with_suffix(file_format))
     return path
 
 # TODO: implement me
