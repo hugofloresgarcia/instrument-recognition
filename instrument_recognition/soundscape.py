@@ -45,16 +45,11 @@ def sample_from_distribution_spec(spec):
 def get_audio_duration(path_to_audio):
     return librosa.core.get_duration(filename=path_to_audio)
 
-def main():
+def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = True)
     data_dir = Path(ir.core.DATA_DIR)
 
-    dataset = 'medleydb'
-    name = 'mdb-synthetic-mono'
-
-    num_soundscapes = 1000
     ref_db = -45
     duration = 10.0
-    monophonic = True
 
     min_events = 1
     max_events = 9
@@ -95,12 +90,18 @@ def main():
 
             # add random number of foreground events
             if monophonic:
-                playhead = 0.0
+                # ALWAYS put something betweeen seconds (0, 1)
+                playhead = get_randn(0.3, 0.2, min=0, max=1)
                 while playhead < (duration - event_duration_spec['min']):
+                    # random choice for label and source file
                     label = choose(os.listdir(fg_path))
                     source_file = choose([str(fg_path/label/f) for f in os.listdir(fg_path/label) if Path(f).suffix == '.wav'])
+
+                    # the event can last as long as it wants, as long as it doesn't run over the soundscape duration
                     event_duration = min(sample_from_distribution_spec(event_duration_spec), duration - playhead)
-                    event_duration = event_duration / time_spec['max']
+                    event_duration = event_duration / time_spec['max'] # take the worst case time stretch into account
+
+                    # pick anywhere in the source file 
                     source_time = uniform(0, get_audio_duration(source_file) - event_duration)
                     
                     sc.add_event(label=('const', label),
@@ -112,8 +113,12 @@ def main():
                         pitch_shift=tuple(pitch_spec.values()),
                         time_stretch=tuple(time_spec.values()))
                     
+                    # move the playhead to the very end of the event
                     playhead += event_duration
-                    playhead += get_randn(0.5, 0.2, min=0, max=3)
+                    # round the playhead to the nearest second (to only have 1 event per second frame)
+                    playhead = np.ceil(playhead)
+                    # add a random offset
+                    playhead += get_randn(0.3, 0.2, min=0, max=1)
             else:
                 n_events = np.random.randint(min_events, max_events+1)
                 for _ in range(n_events):
@@ -147,4 +152,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--name', type=str, required=True)
+    parser.add_argument('--dataset', type=str, default='medleydb')
+    parser.add_argument('--monophonic', type=ir.utils.str2bool, default=True)
+
+    args = parser.parse_args()
+
+    make_soundscapes(name=args.name, dataset=args.dataset, monophonic=args.monophonic)
