@@ -8,12 +8,13 @@ import pytorch_lightning as pl
 import instrument_recognition as ir
 import instrument_recognition.utils as utils
 from instrument_recognition.task import InstrumentDetectionTask, train_instrument_detection_model
+from instrument_recognition.preprocess import OpenL3Preprocessor
 from instrument_recognition.models import Model
-from instrument_recognition.datasets import BaseDataModule
+from instrument_recognition.datasets import DataModule
 
 def dump_classlist(dm, save_dir):
     # get classlist and number of classes
-    classlist = dm.get_classes()
+    classlist = dm.classlist()
     num_output_units = len(classlist)
     print(f'classlist is: {classlist}')
     with open(os.path.join(save_dir, 'classlist.yaml'), 'w') as f:
@@ -22,10 +23,14 @@ def dump_classlist(dm, save_dir):
 def run_task(hparams):
     # load the datamodule
     print(f'loading datamodule...')
-    dm = BaseDataModule.from_argparse_args(hparams)
+    transform = ir.preprocess.OpenL3Preprocessor(hparams.preprocessor_name)
+    dm = DataModule(name=hparams.dataset_name, batch_size=hparams.batch_size, 
+                    num_workers=hparams.num_workers, preprocess_fn=transform)
+    dm.setup()
+    hparams.output_dim = len(dm.classlist())
 
     # define a save dir
-    save_dir = os.path.join(ir.LOG_DIR, hparams.name, f'version_{hparams.version}')
+    save_dir = ir.LOG_DIR / hparams.name / f'version_{hparams.version}'
     os.makedirs(save_dir, exist_ok=True)
     dump_classlist(dm, save_dir)
 
@@ -39,8 +44,8 @@ def run_task(hparams):
     
     # run train fn and get back test results
     print(f'running task')
-    task, result = train_instrument_detection_model(task, name=hparams.name, version=hparams.version, 
-                                    gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=hparams.random_seed, 
+    task, result = train_instrument_detection_model(task, name=hparams.name, version=hparams.version,
+                                    gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
                                     log_dir=ir.LOG_DIR, test=hparams.test)
 
     # save model to torchscript
@@ -48,18 +53,21 @@ def run_task(hparams):
 
 if __name__ == "__main__":
     import argparse
-    from instrument_recognition.utils.train import str2bool
+    from instrument_recognition.utils import str2bool
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, required=True)
+    parser.add_argument('--name', type=str, required=True,
+        help='experiment name')
     parser.add_argument('--version', type=int, required=True)
 
     parser.add_argument('--gpuid', type=utils.parser_types.noneint, default=0)
     parser.add_argument('--max_epochs', type=int, default=100)
     parser.add_argument('--test', type=utils.parser_types.str2bool, default=False)
 
-    parser = Model.add_model_specific_args(parser)
-    parser = BaseDataModule.add_argparse_args(parser)
+    parser = OpenL3Preprocessor.add_argparse_args(parser)
+    parser = Model.add_argparse_args(parser)
+    parser = DataModule.add_argparse_args(parser)
+    parser = InstrumentDetectionTask.add_argparse_args(parser)
 
     hparams = parser.parse_args()
 

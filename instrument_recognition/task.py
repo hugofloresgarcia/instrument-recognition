@@ -50,7 +50,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # datamodules
         self.datamodule = datamodule
-        self.classes = self.datamodule.dataset.classes
+        self.classlist = self.datamodule.dataset.classlist
 
         # do weighted cross entropy? 
         if self.weighted_cross_entropy:
@@ -65,15 +65,16 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     @classmethod
     def from_hparams(cls, model, datamodule, hparams):
-        obj = cls.__init__(model, datamodule,
-                           learning_rate=hparams.learning_rate, 
-                           weighted_cross_entropy=hparams.weighted_cross_entropy, 
-                           mixup=hparams.mixup,
-                           mixup_alpha=hparams.mixup_alpha, 
-                           log_epoch_metrics=hparams.log_epoch_metrics)
+        obj = cls(model, datamodule,
+                    learning_rate=hparams.learning_rate, 
+                    weighted_cross_entropy=hparams.weighted_cross_entropy, 
+                    mixup=hparams.mixup,
+                    mixup_alpha=hparams.mixup_alpha, 
+                    log_epoch_metrics=hparams.log_epoch_metrics)
         obj.hparams = hparams
         return obj
     
+    @classmethod
     def add_argparse_args(cls, parent_parser):
         parser = parent_parser
         parser.add_argument('--learning_rate', type=float, default=0.0003)
@@ -127,6 +128,8 @@ class InstrumentDetectionTask(pl.LightningModule):
             X, y = batch['X'], batch['y']
             # forward pass through model
             yhat = self.model(X)
+            print(X, y, yhat)
+            exit()
             loss = self.criterion(yhat, y)
         else:
             batch = self.preprocess(batch, train=train)
@@ -272,8 +275,8 @@ class InstrumentDetectionTask(pl.LightningModule):
     def log_random_sample(self, batch, title='sample'):
         batch = self.batch_detach(batch)
         idx = np.random.randint(0, len(batch['X']))
-        pred = self.classes[batch['yhat'][idx]]
-        truth = self.classes[batch['y'][idx]]
+        pred = self.classlist[batch['yhat'][idx]]
+        truth = self.classlist[batch['y'][idx]]
         path_to_audio = batch['path_to_audio'][idx]
 
         self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
@@ -310,20 +313,20 @@ class InstrumentDetectionTask(pl.LightningModule):
         # CONFUSION MATRIX
         conf_matrix = sklearn.metrics.confusion_matrix(
             y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
-            labels=list(range(len(self.classes))), normalize=None)
+            labels=list(range(len(self.classlist))), normalize=None)
         conf_matrix = np.around(conf_matrix, 3)
 
         # get plotly images as byte array
-        conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classes))
+        conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classlist))
 
         # CONFUSION MATRIX (NORMALIZED)
         norm_conf_matrix = sklearn.metrics.confusion_matrix(
             y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
-            labels=list(range(len(self.classes))), normalize='true')
+            labels=list(range(len(self.classlist))), normalize='true')
         norm_conf_matrix = np.around(norm_conf_matrix, 2)
 
         # get plotly images as byte array
-        norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classes))
+        norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classlist))
 
         # log images
         self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))

@@ -10,7 +10,13 @@ recurrent_model_sizes = {
     'lstm': {
         'num_layers': 4, 
         'num_heads': None},
+    'bilstm': {
+        'num_layers': 4, 
+        'num_heads': None},
     'gru': {
+        'num_layers': 4, 
+        'num_heads': None},
+    'bigru': {
         'num_layers': 4, 
         'num_heads': None},
     'transformer': {
@@ -59,10 +65,21 @@ class Model(pl.LightningModule):
     
     @classmethod
     def from_hparams(cls, hparams):
-        obj = cls.__init__(model_size=hparams.model_size, output_dim=hparams.output_dim, 
+        obj = cls(model_size=hparams.model_size, output_dim=hparams.output_dim, 
                            recurrence_type=hparams.recurrence_type, dropout=hparams.dropout)
         obj.hparams = hparams
         return obj
+
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        parser = parent_parser
+        parser.add_argument('--model_size', type=str, required=True, 
+            help=f'model size. one of {model_sizes.keys()}')
+        parser.add_argument('--recurrence_type', type=str, default='bilstm', 
+            help=f'type of recurrence. one of {recurrent_model_sizes.keys()}')
+        parser.add_argument('--dropout', type=float, default=0.3, 
+            help='dropout for model')
+        return parser
 
     def forward(self, x):
         # input should be (batch, sequence, embedding)
@@ -82,10 +99,6 @@ class Model(pl.LightningModule):
         x = self.fc_output(x)
 
         return x
-
-    @classmethod
-    def add_model_specific_args(cls, parent_parser):
-        parent_parser.add_argument
 
 def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers: int = 4,
                         d_hidden: int = 128, num_heads: int = 4, dropout: float = 0.3):

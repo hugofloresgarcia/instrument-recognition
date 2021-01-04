@@ -1,88 +1,40 @@
-# import os
-# from concurrent.futures import ThreadPoolExecutor
+import numpy as np
+import pytorch_lightning as pl
 
-# import torch
-# import tqdm
-# import numpy as np
+import torchopenl3
 
-# import torchopenl3
-# from torchopenl3 import OpenL3Embedding
+import instrument_recognition as ir
+from instrument_recognition import utils
 
-# from instrument_recognition import utils
+class OpenL3Preprocessor(pl.LightningModule):
 
-# PATH_TO_DATA = '/home/hugo/data/mono_music_sed/mdb/AUDIO/'
-# CUDA_DEVICE = 0
+    def __init__(self, model_name: str = 'openl3-mel256-6144-music'):
+        super().__init__()
+        self.save_hyperparameters()
+        _, input_repr, embedding_size, content_type = model_name.split('-')
+        self.embedding_model = torchopenl3.OpenL3Embedding(input_repr=input_repr, 
+                                                    embedding_size=int(embedding_size), 
+                                                    content_type=content_type, 
+                                                    pretrained=True)
+    @classmethod
+    def from_hparams(cls, hparams):
+        obj = cls.__init__(hparams.preprocessor_name)
+        obj.hparams = hparams
+        return obj
+    
+    @classmethod
+    def add_argparse_args(cls, parent_parser):
+        parser = parent_parser
+        parser.add_argument('--preprocessor_name', type=str, default='openl3-mel256-6144-music')
+        return parser
+    
+    def __call__(self, audio, sr, augment=False):
+        # add augmentation here?
+        if augment:
+            audio = utils.effects.augment_from_array_to_array(audio, sr)
 
-# # TODO: need to add a from_array, from_file, etc.
-# # TODO: need to a preprocess(dataset_name) 
-# # from /data/ to /cache/
-# # TODO: should you save new metadata entries in the cache too? I don't think so. 
-# # TODO: maybe each dataset entry has a UUID and we save according to that
-
-# # define our preprocess callables and assign them a path
-# preprocessors = [
-#     {'path': '/home/hugo/data/mono_music_sed/mdb/EMBEDDINGS/', 
-#     'model': OpenL3Embedding(n_mels=128, embedding_size=6144, pretrained=True).cuda(CUDA_DEVICE)}, 
-#     # {'path': '/home/hugo/data/mono_music_sed/mdb/SPECTROGRAMS/', 
-#     # 'model': Melspectrogram(sr=48000, n_mels=128).cuda(CUDA_DEVICE)}
-# ]
-
-# if __name__ == "__main__":
-#     for preprocessor in preprocessors:
-#         print(f'saving to: {preprocessor["path"]}')
-#         # load a base datamodule and 
-#         # let it do the magic  
-#         dm = load_datamodule(PATH_TO_DATA, batch_size=64, num_workers=2, use_npy=False)
-
-#         # make dataloader - dataset pairs
-#         pairs = ((dm.train_dataloader(), dm.train_data, 'train'), 
-#                 (dm.test_dataloader(), dm.test_data, 'test'),
-#                 (dm.val_dataloader(), dm.val_data, 'validation'))
-
-#         model = preprocessor['model']
-#         model.eval()
-
-#         # iterate through the dataloaders
-#         for dl, dataset, subset_name in pairs:
-#             pbar = tqdm.tqdm(dl)
-#             for batch in pbar:
-#                 # retrieve what we need from the dataloader
-#                 X = batch['X'].cuda(CUDA_DEVICE)
-
-#                 # forward pass through the model
-#                 with torch.no_grad():
-#                     preprocessed_X = model(X).detach().cpu().numpy()
-
-#                 # subpbar = tqdm.tqdm(enumerate(zip(preprocessed_X, batch['metadata_index'])))
-                
-#                 def save_data_and_metadata(index_tuples):
-#                     batch_idx, metadata_index = index_tuples
-#                     x = preprocessed_X[batch_idx]
-#                     # create a new metadata dict for our preprocessed data
-#                     new_entry = dict(dataset.metadata[metadata_index])
-
-#                     base_chunk_name = new_entry['base_chunk_name']
-#                     start_time = new_entry['start_time']
-#                     label = new_entry['label']
-
-#                     # double check we doing the right thing
-#                     assert new_entry['path_to_audio'] == batch['path_to_audio'][batch_idx]
-
-#                     # create new paths!
-#                     new_entry['path_to_npy'] = os.path.join(preprocessor['path'], subset_name, label,
-#                                                         base_chunk_name, f'{start_time}.npy')
-#                     new_entry['path_to_metadata'] = new_entry['path_to_npy'].replace('.npy', '.yaml')
-#                     os.makedirs(os.path.dirname(new_entry['path_to_npy']), exist_ok=True)
-#                     # print(f'saving {new_entry["path_to_npy"]}')
-                    
-#                     # save the new things!
-#                     utils.data.save_dict_yaml(new_entry, new_entry['path_to_metadata'])
-#                     np.save(new_entry['path_to_npy'], x)
-                
-#                 # multithreading this will make it SO MUCH FASTER (IO bound problem)
-#                 index_tuples = [(b, m) for b, m in enumerate(batch['metadata_index'])]
-#                 with ThreadPoolExecutor(max_workers=40) as executor:
-#                     fut = executor.map(save_data_and_metadata, index_tuples)
-#                     _ = list(fut)
-                
-
+        # embed using openl3 model
+        embeddings = torchopenl3.embed(model=self.embedding_model, audio=audio, 
+                                    sample_rate=sr)
+        
+        return embeddings
