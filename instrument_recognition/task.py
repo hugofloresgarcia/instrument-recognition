@@ -113,7 +113,23 @@ class InstrumentDetectionTask(pl.LightningModule):
     #-------------------------------
     
     def criterion(self, yhat, y):
-        return F.cross_entropy(yhat, y, weight=self.class_weights)
+        weights = self.class_weights if 'weighted' in self.loss_fn else None
+        if 'multiclass_cross_entropy' in self.loss_fn:
+            # take the argmax of the y matrix. 
+            # y and yhat matrix should be shape (batch, sequence, num_classes)
+            # we want y to be shape (batch * sequence) and yhat (batch, sequence, num_classes)
+            
+            y = torch.argmax(y, dim=-1).view(-1)
+            yhat = yhat.view(-1, yhat.shape[-1])
+            loss = F.cross_entropy(yhat, y, weight=weights)
+        elif 'binary_cross_entropy' in self.loss_fn:
+            y = y.view(-1, y.shape[-1])
+            yhat = yhat.view(-1, yhat.shape[-1])
+            loss = F.binary_cross_entropy(yhat, y, weight=weights)
+        else:
+            raise ValueError(f'incorrect loss_fn: {self.loss_fn}')
+        
+        return loss
 
     def preprocess(self, batch, train=False):
         if len(batch['X']) == 1:
@@ -128,8 +144,6 @@ class InstrumentDetectionTask(pl.LightningModule):
             X, y = batch['X'], batch['y']
             # forward pass through model
             yhat = self.model(X)
-            print(X, y, yhat)
-            exit()
             loss = self.criterion(yhat, y)
         else:
             batch = self.preprocess(batch, train=train)

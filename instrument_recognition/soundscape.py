@@ -57,7 +57,7 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
         num_soundscapes = int(int(total_len_s) // duration * 3)
         print(f'generating {num_soundscapes} soundscapes')
 
-        event_time_spec = dict(dist='truncnorm', mean=5.0, std=2.0, max=10.0)
+        event_time_spec = dict(dist='truncnorm', mean=5.0, std=2.0, min=0.0, max=10.0)
         snr_spec = dict(dist='uniform', min=6, max=15)
         pitch_spec = dict(dist='uniform', min=-3.0, max=3.0)
         time_spec = dict(dist='uniform', min=0.8, max=1.2)
@@ -113,7 +113,7 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
                 n_events = np.random.randint(min_events, max_events+1)
                 for _ in range(n_events):
                     label = choose(os.listdir(fg_path))
-                    source_file = choose([f for f in os.listdir(fg_path/label) if Path(f).suffix == '.wav'])
+                    source_file = choose([str(fg_path/label/f) for f in os.listdir(fg_path/label) if Path(f).suffix == '.wav'])
                     event_duration = sample_from_distribution_spec(event_duration_spec) * time_spec['max']
                     source_time = uniform(0, get_audio_duration(source_file))
 
