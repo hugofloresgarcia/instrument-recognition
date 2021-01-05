@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 import librosa
 import pytorch_lightning as pl
 import torchopenl3
+import tqdm
 
 import instrument_recognition as ir
 from instrument_recognition import utils
@@ -42,16 +43,17 @@ class Dataset(torch.utils.data.Dataset):
         """
         # define a root path for our dataset
         self.sr = ir.SAMPLE_RATE
-        self.root_path = ir.DATA_DIR / name / partition
+        self.duration = 10.0
+        self.root_dir = ir.DATA_DIR / name / partition
         self.cache_dir = ir.CACHE_DIR / name / partition
         self.y_cache = {}
 
         self.augment = partition == 'train'
         self.preprocess_fn = preprocess_fn
 
-        print(f'loading metadata from {self.root_path}...')
-        assert self.root_path.exists()
-        records = utils.data.glob_all_metadata_entries(self.root_path, pattern='**/*.json')
+        print(f'loading metadata from {self.root_dir}...')
+        assert self.root_dir.is_dir(), f'{self.root_dir} does not exist or is a file'
+        records = utils.data.glob_all_metadata_entries(self.root_dir, pattern='**/*.json')
         records = remap_classes(records, remap_class_dict)
         self.setup_dataset(records)
 
@@ -67,6 +69,8 @@ class Dataset(torch.utils.data.Dataset):
         # get only a class subset if that is desired
         if class_subset is not None:
             self.filter_metadata_by_class_subset(class_subset)
+
+        self.preprocess_all()
 
     def __len__(self):
         return len(self.records)
@@ -97,6 +101,8 @@ class Dataset(torch.utils.data.Dataset):
 
     def setup_dataset(self, records):
         self.records = records
+        if len(self.records) == 0:
+            raise ValueError(f'records were empty.')
         print(f'found {len(self.records)} entries')
         self.classlist = utils.data.get_classlist(self.records)
         print(self.get_class_frequencies())
@@ -104,25 +110,27 @@ class Dataset(torch.utils.data.Dataset):
 
     def filter_records_by_class_subset(self, class_subset):
         subset = utils.data.filter_records_by_class_subset(self.records, class_subset)
-        print(len(subset))
         self.setup_dataset(subset)
 
     def filter_unwanted_classes(self, unwanted_classes):
-        print(len(self.records))
         subset = utils.data.filter_unwanted_classes(self.records, unwanted_classes)
-        print(len(subset))
         self.setup_dataset(subset)    
     
     def get_X(self, entry):
-        path_to_cached_file = self.cache_dir / entry['path_to_audio']
+        path_to_cached_file = self.cache_dir / Path(entry['path_to_audio']).relative_to(self.root_dir)
 
         if not path_to_cached_file.exists():
             # load the path to audio
             audio = au.io.load_audio_file(entry['path_to_audio'], self.sr)
-            
+
+            # truncate any extra samples from scaper
+            if not audio.shape[-1] == entry['duration'] * self.sr:
+                audio = audio[:, 0:int(entry['duration'] * self.sr)]
+
             X = self.preprocess_fn(audio, self.sr, augment=self.augment)
 
             # save embeddings to cache
+            os.makedirs(path_to_cached_file.parent, exist_ok=True)
             np.save(str(path_to_cached_file), X)
         else:
             # load from cache
@@ -139,6 +147,12 @@ class Dataset(torch.utils.data.Dataset):
             y = utils.data.get_one_hot_matrix(entry, self.classlist, resolution=resolution)
     
         return torch.from_numpy(y) 
+
+    def preprocess_all(self):
+        pbar = tqdm.tqdm(self.records)
+        for entry in pbar:
+            pbar.set_description(f'preprocessing {Path(entry["path_to_audio"]).name}')
+            self.get_X(entry)
 
     def load_audio(self, entry):
         assert 'path_to_audio' in entry, f'didnt find a path to audio in {entry}'
@@ -230,12 +244,11 @@ class CollateBatches:
         """
         collate a batch of dataset samples
         """
-        # print(batch)
         X = [e['X'] for e in batch]
         y = [e['y'] for e in batch]
 
         X = torch.stack(X)
-        y = torch.stack(y).view(-1)
+        y = torch.stack(y)
 
         # add the rest of all keys
         data = {key: [entry[key] for entry in batch] for key in batch[0]}

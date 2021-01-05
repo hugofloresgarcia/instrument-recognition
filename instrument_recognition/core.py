@@ -10,10 +10,11 @@ from pathlib import Path
 
 
 # Static directories
+ROOT_DIR = Path(__file__).parent.parent
 ASSETS_DIR = Path(__file__).parent / 'assets'
 CACHE_DIR = Path(__file__).parent.parent / 'cache'
 DATA_DIR = Path(__file__).parent.parent / 'data'
-LOG_DIR = Path(__file__).parent / 'test-tubes'
+LOG_DIR = Path(__file__).parent.parent / 'test-tubes'
 
 
 # Static, module-wide constants

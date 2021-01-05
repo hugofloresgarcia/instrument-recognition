@@ -23,7 +23,10 @@ def dump_classlist(dm, save_dir):
 def run_task(hparams):
     # load the datamodule
     print(f'loading datamodule...')
-    transform = ir.preprocess.OpenL3Preprocessor(hparams.preprocessor_name)
+
+    device = 'cpu' if hparams.gpuid is None else hparams.gpuid
+    transform = ir.preprocess.OpenL3Preprocessor(hparams.preprocessor_name, cuda_device=device)
+
     dm = DataModule(name=hparams.dataset_name, batch_size=hparams.batch_size, 
                     num_workers=hparams.num_workers, preprocess_fn=transform)
     dm.setup()

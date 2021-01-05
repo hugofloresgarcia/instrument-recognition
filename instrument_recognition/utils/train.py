@@ -6,6 +6,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 import torch
 
+
 def save_torchscript_model(model, save_path):
     """
     saves a pl.LightningModule to torchscript via trace

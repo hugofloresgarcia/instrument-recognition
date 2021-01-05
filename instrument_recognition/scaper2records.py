@@ -8,17 +8,15 @@ import jams
 
 import instrument_recognition as ir
 
-def create_records_for_scaper_dataset(soundscape_name: str, dataset: str = 'medleydb'):
-    dataset_root = ir.DATA_DIR / dataset 
+def create_records_for_scaper_dataset(name: str):
+    dataset_root = ir.DATA_DIR / name 
     partitions = [dataset_root / o for o in os.listdir(dataset_root) if os.path.isdir(dataset_root / o)]
     print(f'found partitions {partitions}')
     
     for partition in partitions:
-        data_path = dataset_root / partition / soundscape_name
+        data_path = dataset_root / partition 
         all_jams_files = glob.glob(str(data_path / '*.jams'), recursive=True)
         all_jams = [jams.load(p) for p in all_jams_files]
-
-        classlist = os.listdir(data_path.parent / 'foreground' )
 
         records = jams_to_records(all_jams)
 
@@ -26,7 +24,7 @@ def create_records_for_scaper_dataset(soundscape_name: str, dataset: str = 'medl
             f = r['path_to_jams']
             f = str(Path(f).with_suffix(''))
             print(f'saving record {f}')
-            ir.utils.data.save_json(r, f)
+            ir.utils.data.save_metadata_entry(r, f)
 
 def jams_to_records(jam_list):
     records = []
@@ -134,10 +132,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--soundscape_name', type=str, required=True, nargs='+')
-    parser.add_argument('--dataset', type=str, default='medleydb')
+    parser.add_argument('--name', type=str, required=True, nargs='+')
 
     args = parser.parse_args()
 
-    for name in args.soundscape_name:
-        create_records_for_scaper_dataset(name, args.dataset)
+    for name in args.name:
+        create_records_for_scaper_dataset(name)

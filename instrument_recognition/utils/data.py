@@ -5,6 +5,7 @@ import yaml
 from pathlib import Path
 import collections
 
+import numpy as np
 import pandas as pd 
 import tqdm.contrib.concurrent
 from sklearn.model_selection import train_test_split
@@ -132,6 +133,14 @@ def glob_all_metadata_entries(root_dir, pattern='**/*.json'):
 """
 json and yaml 
 """
+def _add_file_format_to_filename(path: str, file_format: str):
+    if '.' not in file_format:
+        file_format = f'.{file_format}'
+
+    if Path(path).suffix != file_format:
+        path = Path(path).with_suffix(file_format)
+    return str(path)
+
 def save_metadata_entry(entry, path, format='json'):
     os.makedirs(Path(path).parent, exist_ok=True)
     path = _add_file_format_to_filename(path, format)

@@ -36,13 +36,14 @@ class InstrumentDetectionTask(pl.LightningModule):
     def __init__(self, model, datamodule, 
                  max_epochs: int = 100,
                  learning_rate: float = 0.0003,
-                 weighted_cross_entropy: bool = True, 
+                 loss_fn: str = 'weighted_multiclass_cross_entropy', 
                  mixup: bool = False, mixup_alpha: float = 0.2,
                  log_epoch_metrics: bool = True):
         super().__init__()
         self.save_hyperparameters()
         self.max_epochs = max_epochs
-        self.weighted_cross_entropy = weighted_cross_entropy
+        self.loss_fn = loss_fn
+        self.multiclass = 'multiclass' in loss_fn
         self.mixup = mixup
         self.mixup_alpha = mixup_alpha
         self.learning_rate = learning_rate
@@ -52,14 +53,10 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.datamodule = datamodule
         self.classlist = self.datamodule.dataset.classlist
 
-        # do weighted cross entropy? 
-        if self.weighted_cross_entropy:
-            assert hasattr(self.datamodule.dataset, 'class_weights'), 'dataset is missing self.class_weights'
-            self.class_weights = nn.Parameter(
-                torch.from_numpy(self.datamodule.dataset.class_weights).float())
-            self.class_weights.requires_grad = False
-        else:
-            self.class_weights = None
+        assert hasattr(self.datamodule.dataset, 'class_weights'), 'dataset is missing self.class_weights'
+        self.class_weights = nn.Parameter(
+            torch.from_numpy(self.datamodule.dataset.class_weights).float())
+        self.class_weights.requires_grad = False
 
         self.model = model
 
@@ -67,7 +64,7 @@ class InstrumentDetectionTask(pl.LightningModule):
     def from_hparams(cls, model, datamodule, hparams):
         obj = cls(model, datamodule,
                     learning_rate=hparams.learning_rate, 
-                    weighted_cross_entropy=hparams.weighted_cross_entropy, 
+                    loss_fn=hparams.loss_fn, 
                     mixup=hparams.mixup,
                     mixup_alpha=hparams.mixup_alpha, 
                     log_epoch_metrics=hparams.log_epoch_metrics)
@@ -78,8 +75,8 @@ class InstrumentDetectionTask(pl.LightningModule):
     def add_argparse_args(cls, parent_parser):
         parser = parent_parser
         parser.add_argument('--learning_rate', type=float, default=0.0003)
-        parser.add_argument('--weighted_cross_entropy', type=bool, default=True)
-        parser.add_argument('--mixup', type=bool, default=True)
+        parser.add_argument('--loss_fn', type=str, default='weighted_multiclass_cross_entropy')
+        parser.add_argument('--mixup', type=bool, default=False)
         parser.add_argument('--mixup_alpha', type=float, default=0.2)
         parser.add_argument('--log_epoch_metrics', type=bool, default=True)
         return parser
@@ -118,7 +115,6 @@ class InstrumentDetectionTask(pl.LightningModule):
             # take the argmax of the y matrix. 
             # y and yhat matrix should be shape (batch, sequence, num_classes)
             # we want y to be shape (batch * sequence) and yhat (batch, sequence, num_classes)
-            
             y = torch.argmax(y, dim=-1).view(-1)
             yhat = yhat.view(-1, yhat.shape[-1])
             loss = F.cross_entropy(yhat, y, weight=weights)
@@ -146,15 +142,20 @@ class InstrumentDetectionTask(pl.LightningModule):
             yhat = self.model(X)
             loss = self.criterion(yhat, y)
         else:
+            raise NotImplementedError
             batch = self.preprocess(batch, train=train)
             X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.mixup_alpha)
             # forward pass through model
             yhat = self.model(X)
             loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
             y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
+        
+        # squash down (sequence, batch, n) to (sequence * batch, n) if multiclass
+        yhat = yhat.view(-1, yhat.shape[-1])
+        y = y.view(-1, y.shape[-1])
 
-        probits = F.softmax(yhat, dim=1)
-        yhat = torch.argmax(probits, dim=1, keepdim=False)
+        probits = F.softmax(yhat, dim=1) if self.multiclass else F.sigmoid(yhat)
+        yhat = torch.argmax(probits, dim=1, keepdim=False) if self.multiclass else probits
 
         return dict(loss=loss, y=y.detach(), probits=probits.detach(),
                     yhat=yhat.detach(), X=X.detach())
@@ -173,7 +174,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         if batch_idx % 250 == 0:
             self.log_random_sample(batch, title='train-sample')
         
-        self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
+        # self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
 
         return result['loss']
 
@@ -246,38 +247,56 @@ class InstrumentDetectionTask(pl.LightningModule):
     #-------------------`------------
 
     def log_uncertainty_metrics(self, probits, y, prefix='val'):
-        assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
-        # convert to numpy
-        probits = probits.detach().numpy()
-        y = y.detach().numpy().astype(np.int)
+        if self.multiclass:
+            assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
+            # convert to numpy
+            probits = probits.detach().numpy()
+            y = y.detach().numpy().astype(np.int)
 
-        # compute metrics
-        ece = um.ece(y, probits, num_bins=30)
-        self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
+            # compute metrics
+            ece = um.ece(y, probits, num_bins=30)
+            self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
-        if prefix == 'test':
-            print('computing reliability')
-            reliability_fig = um.reliability_diagram(probits, y)
+            if prefix == 'test':
+                print('computing reliability')
+                reliability_fig = um.reliability_diagram(probits, y)
 
-            log_dir = self.log_dir
-            confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
-            confidences = np.array(confidences)
-            accuracies = np.array(accuracies)
-            xbins = np.array(xbins)
-            np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
-            np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
-            np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
+                log_dir = self.log_dir
+                confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
+                confidences = np.array(confidences)
+                accuracies = np.array(accuracies)
+                xbins = np.array(xbins)
+                np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
+                np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
+                np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
 
-            self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
+                self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
             print('done :)')
+        else: 
+            raise NotImplementedError
 
-    def log_sklearn_metrics(self, yhat, y, prefix='val'):
-        y = y.detach().cpu().numpy()
-        yhat = yhat.detach().cpu().numpy()
+    def log_multilabel_metrics(self, yhat, y, prefix='val'):
+        assert y.ndim == 2 and yhat.ndim == 2
+        # transpose to (classes, batch * seq)
+        y, yhat = y.permute(1, 0), yhat.permute(1, 0)
+        for idx, (tru, probit) in enumerate(zip(y, yhat)):
+            label = self.classlist[idx]
+            self.log(f'accuracy/{prefix}/{label}', accuracy_score(tru, probit, normalize=True), on_epoch=False)
+            self.log(f'precision/{prefix}/{label}', precision_score(tru, probit, average='binary'), on_epoch=False)
+            self.log(f'recall/{prefix}/{label}', recall_score(tru, probit,  average='binary'), on_epoch=False)
+            self.log(f'fscore/{prefix}{label}', fbeta_score(tru, probit,  average='binary', beta=1), on_epoch=False)
+        
+    def log_multiclass_metrics(self, yhat, y, prefix='val'):
         self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True), on_epoch=False)
         self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'), on_epoch=False)
         self.log(f'recall/{prefix}', recall_score(y, yhat,  average='micro'), on_epoch=False)
         self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='micro', beta=1), on_epoch=False)
+
+    def log_sklearn_metrics(self, yhat, y, prefix='val'):
+        if self.multiclass:
+            self.log_multiclass_metrics(yhat, y, prefix)
+        else:
+            self.log_multilabel_metrics(yhat, y, prefix)
 
     def log_embedding(self, embedding_batch, y, metadata, title):
         assert embedding_batch.ndim == 2
@@ -287,19 +306,23 @@ class InstrumentDetectionTask(pl.LightningModule):
                                             metadata=metadata, global_step=self.global_step)
 
     def log_random_sample(self, batch, title='sample'):
-        batch = self.batch_detach(batch)
-        idx = np.random.randint(0, len(batch['X']))
-        pred = self.classlist[batch['yhat'][idx]]
-        truth = self.classlist[batch['y'][idx]]
-        path_to_audio = batch['path_to_audio'][idx]
+        #TODO: need to add an if multiclass thing here
+        if self.multiclass:
+            batch = self.batch_detach(batch)
+            idx = np.random.randint(0, len(batch['X']))
+            pred = self.classlist[batch['yhat'][idx]]
+            truth = self.classlist[batch['y'][idx]]
+            path_to_audio = batch['path_to_audio'][idx]
 
-        self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
-            f'pred: {pred}\n truth:{truth}', 
-            self.global_step)
+            self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
+                f'pred: {pred}\n truth:{truth}', 
+                self.global_step)
 
-        self.logger.experiment.add_text(f'{title}-path_to_audio/{truth}', 
-                                        str(path_to_audio), 
-                                        self.global_step)
+            self.logger.experiment.add_text(f'{title}-path_to_audio/{truth}', 
+                                            str(path_to_audio), 
+                                            self.global_step)
+        else:
+            raise NotImplementedError
 
     def register_all_hooks(self):
         layer_names = self.model.log_layers
@@ -313,8 +336,9 @@ class InstrumentDetectionTask(pl.LightningModule):
                 self.fwd_hooks[name] = utils.train.Hook(layer) 
         if not found_layer:
             raise Exception(f'couldnt find at least one of the layers: {layer_names}')
- 
+
     def _log_epoch_metrics(self, outputs, prefix='val'):
+        # TODO: need to add an if multiclass thing here
         # calculate confusion matrices
         yhat = torch.cat([o['yhat'] for o in outputs]).detach().cpu()
         y = torch.cat([o['y'] for o in outputs]).detach().cpu()
@@ -323,36 +347,57 @@ class InstrumentDetectionTask(pl.LightningModule):
         
         # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
+        if multiclass:
+            # CONFUSION MATRIX
+            conf_matrix = sklearn.metrics.confusion_matrix(
+                y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
+                labels=list(range(len(self.classlist))), normalize=None)
+            conf_matrix = np.around(conf_matrix, 3)
 
-        # CONFUSION MATRIX
-        conf_matrix = sklearn.metrics.confusion_matrix(
-            y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
-            labels=list(range(len(self.classlist))), normalize=None)
-        conf_matrix = np.around(conf_matrix, 3)
+            # get plotly images as byte array
+            conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classlist))
 
-        # get plotly images as byte array
-        conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classlist))
+            # CONFUSION MATRIX (NORMALIZED)
+            norm_conf_matrix = sklearn.metrics.confusion_matrix(
+                y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
+                labels=list(range(len(self.classlist))), normalize='true')
+            norm_conf_matrix = np.around(norm_conf_matrix, 2)
 
-        # CONFUSION MATRIX (NORMALIZED)
-        norm_conf_matrix = sklearn.metrics.confusion_matrix(
-            y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
-            labels=list(range(len(self.classlist))), normalize='true')
-        norm_conf_matrix = np.around(norm_conf_matrix, 2)
+            # get plotly images as byte array
+            norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classlist))
 
-        # get plotly images as byte array
-        norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classlist))
+            # log metrics
+            self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
+            self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'))
+            self.log(f'recall/{prefix}', recall_score(y, yhat, average='micro'))
+            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
+            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
 
-        # log images
-        self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
-        self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'))
-        self.log(f'recall/{prefix}', recall_score(y, yhat, average='micro'))
-        self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
-        self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
+            self.log_uncertainty_metrics(probits, y, prefix)
 
-        self.log_uncertainty_metrics(probits, y, prefix)
+            self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
+            self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
+        else:
+            # log metrics
+            self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
+            self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'))
+            self.log(f'recall/{prefix}', recall_score(y, yhat, average='micro'))
+            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
+            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
 
-        self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
-        self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
+            self.logger.experiment.add_text(f'report/{prefix}', 
+                classification_report(y, yhat, target_names=self.classlist), self.global_step)
+
+            # reshape to (class, batch) to do per-class scores
+            y = y.t()
+            yhat = yhat.t()
+            for idx, (ytrue, ypred) in enumerate(zip(y, yhat)):
+                classname = self.classes[idx]
+
+                self.log(f'accuracy/{classname}-{prefix}/epoch', accuracy_score(ytrue, ypred, normalize=True))
+                self.log(f'precision/{classname}-{prefix}/epoch', precision_score(ytrue, ypred))
+                self.log(f'recall/{classname}-{prefix}/epoch', recall_score(ytrue, ypred))
+                self.log(f'fscore/{classname}-{prefix}/epoch', fbeta_score(ytrue, ypred, beta=1))
 
         return self.batch_detach(outputs)
 

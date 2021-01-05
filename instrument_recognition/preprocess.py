@@ -2,13 +2,14 @@ import numpy as np
 import pytorch_lightning as pl
 
 import torchopenl3
+import audio_utils as au
 
 import instrument_recognition as ir
 from instrument_recognition import utils
 
 class OpenL3Preprocessor(pl.LightningModule):
 
-    def __init__(self, model_name: str = 'openl3-mel256-6144-music'):
+    def __init__(self, model_name: str = 'openl3-mel256-6144-music', cuda_device=None):
         super().__init__()
         self.save_hyperparameters()
         _, input_repr, embedding_size, content_type = model_name.split('-')
@@ -16,9 +17,12 @@ class OpenL3Preprocessor(pl.LightningModule):
                                                     embedding_size=int(embedding_size), 
                                                     content_type=content_type, 
                                                     pretrained=True)
+        
+        self.cuda_device = cuda_device
+    
     @classmethod
     def from_hparams(cls, hparams):
-        obj = cls.__init__(hparams.preprocessor_name)
+        obj = cls(hparams.preprocessor_name)
         obj.hparams = hparams
         return obj
     
@@ -31,10 +35,10 @@ class OpenL3Preprocessor(pl.LightningModule):
     def __call__(self, audio, sr, augment=False):
         # add augmentation here?
         if augment:
-            audio = utils.effects.augment_from_array_to_array(audio, sr)
+            audio, effect_params = utils.effects.augment_from_array_to_array(audio, sr)
 
         # embed using openl3 model
         embeddings = torchopenl3.embed(model=self.embedding_model, audio=audio, 
-                                    sample_rate=sr)
+                                    sample_rate=sr, device=self.cuda_device)
         
         return embeddings

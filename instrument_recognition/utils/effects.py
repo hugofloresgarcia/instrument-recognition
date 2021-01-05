@@ -3,6 +3,7 @@ import sox
 import librosa
 
 from instrument_recognition import utils
+import audio_utils as au
 
 def _check_audio_types(audio):
     assert audio.ndim == 1, "audio must be mono"
@@ -20,19 +21,20 @@ def augment_from_file_to_file(input_path, output_path, effect_chain=None):
     tfm.build_file(input_path, output_path)
     return effect_params
 
+#TODO: integrate with audio utils
 def augment_from_array_to_array(audio, sr, effect_chain=None):
     effect_chain = effect_chain if effect_chain is not None else get_full_effect_chain()
     tfm, effect_params = get_random_transformer(effect_chain)
     
     # for now, assert that audio is mono and convert to sox format
+    audio = au.librosa_input_wrap(audio)
     assert audio.ndim == 1
-    print(audio.shape)
     audio = np.expand_dims(audio, -1)
     tfm_audio = tfm.build_array(input_array=audio, sample_rate_in=sr)
     audio = np.squeeze(audio, axis=-1)
     tfm_audio = utils.audio.zero_pad(tfm_audio, audio.shape[0])
     tfm_audio = tfm_audio[0:audio.shape[0]]
-    print(tfm_audio.shape)
+    tfm_audio = au.librosa_output_wrap(audio)
     return tfm_audio, effect_params
 
 def trim_silence(audio, sr, min_silence_duration=0.3):
