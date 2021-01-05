@@ -25,7 +25,6 @@ tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
 import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 
-
 def split(a, n):
     "thank you stack overflow"
     k, m = divmod(len(a), n)
@@ -89,10 +88,9 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def forward(self, x):
         return self.model(x)
-    #-------------------------------
+    
     #-------------------------------
     #--------- DATAMODULES ---------
-    #-------------------------------
     #-------------------------------
     def train_dataloader(self):
         return self.datamodule.train_dataloader()
@@ -100,13 +98,11 @@ class InstrumentDetectionTask(pl.LightningModule):
     def val_dataloader(self):
         return self.datamodule.val_dataloader()
 
-    def test_dataloader(self):
-        return self.datamodule.test_dataloader()
+    # def test_dataloader(self):
+    #     return self.datamodule.test_dataloader()
 
     #-------------------------------
-    #-------------------------------
     #---------- TRAINING -----------
-    #-------------------------------
     #-------------------------------
     
     def criterion(self, yhat, y):
@@ -196,21 +192,21 @@ class InstrumentDetectionTask(pl.LightningModule):
         # result['loss'] = result['loss'].detach().cpu()
         return result
 
-    def test_step(self, batch, batch_idx):
-        # get result of forward pass
-        result = self._main_step(batch,batch_idx)
-        # update the batch with the result 
-        batch.update(result)
+    # def test_step(self, batch, batch_idx):
+    #     # get result of forward pass
+    #     result = self._main_step(batch,batch_idx)
+    #     # update the batch with the result 
+    #     batch.update(result)
 
-        # pick and log sample audio
-        if batch_idx % 100 == 0:
-            self.log_random_sample(batch, title='test-sample')
+    #     # pick and log sample audio
+    #     if batch_idx % 100 == 0:
+    #         self.log_random_sample(batch, title='test-sample')
 
-        # metric logging
-        self.log('loss/test', result['loss'].detach().cpu(), logger=True)     
-        self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='test')
+    #     # metric logging
+    #     self.log('loss/test', result['loss'].detach().cpu(), logger=True)     
+    #     self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='test')
 
-        return result
+    #     return result
     
     # OPTIM
     def configure_optimizers(self):
@@ -240,11 +236,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         if self.log_epoch_metrics:
             outputs = self._log_epoch_metrics(outputs, prefix='test')
 
-    #-------------------------------
-    #-------------------------------
+    #------------------------------
     #---------- LOGGING -----------
-    #-------------------------------
-    #-------------------`------------
+    #------------------------------
 
     def log_uncertainty_metrics(self, probits, y, prefix='val'):
         if self.multiclass:
