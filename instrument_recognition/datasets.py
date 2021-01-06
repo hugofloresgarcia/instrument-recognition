@@ -34,22 +34,20 @@ def remap_classes(records, remap_dict):
 
 class Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, name: str, partition: str, preprocess_fn: callable, 
+    def __init__(self, name: str, partition: str, 
                  class_subset: list=None, unwanted_classes: list=None):
         """reads an audio dataset.
 
         the dataset doesn't care how your folder structure is organized, just finds 
         as many metadata (yaml or json) files as it can, and reads each metadata file as a separate data sample. 
         """
+        self.augment = partition == 'train'
+
         # define a root path for our dataset
         self.sr = ir.SAMPLE_RATE
         self.duration = 10.0
         self.root_dir = ir.DATA_DIR / name / partition
-        self.cache_dir = ir.CACHE_DIR / name / partition
         self.y_cache = {}
-
-        self.augment = partition == 'train'
-        self.preprocess_fn = preprocess_fn
 
         print(f'loading metadata from {self.root_dir}...')
         assert self.root_dir.is_dir(), f'{self.root_dir} does not exist or is a file'
@@ -69,8 +67,7 @@ class Dataset(torch.utils.data.Dataset):
         # get only a class subset if that is desired
         if class_subset is not None:
             self.filter_metadata_by_class_subset(class_subset)
-
-        self.preprocess_all()
+        
 
     def __len__(self):
         return len(self.records)
@@ -80,6 +77,7 @@ class Dataset(torch.utils.data.Dataset):
         entry = self.records[index]
 
         # get input
+        print(f'getting {index}')
         X = self.get_X(entry)
 
         # get labels
@@ -117,26 +115,13 @@ class Dataset(torch.utils.data.Dataset):
         self.setup_dataset(subset)    
     
     def get_X(self, entry):
-        path_to_cached_file = self.cache_dir / Path(entry['path_to_audio']).relative_to(self.root_dir)
+        audio = au.io.load_audio_file(entry['path_to_audio'], self.sr)
 
-        if not path_to_cached_file.exists():
-            # load the path to audio
-            audio = au.io.load_audio_file(entry['path_to_audio'], self.sr)
+        # truncate any extra samples from scaper
+        if not audio.shape[-1] == entry['duration'] * self.sr:
+            audio = audio[:, 0:int(entry['duration'] * self.sr)]
 
-            # truncate any extra samples from scaper
-            if not audio.shape[-1] == entry['duration'] * self.sr:
-                audio = audio[:, 0:int(entry['duration'] * self.sr)]
-
-            X = self.preprocess_fn(audio, self.sr, augment=self.augment)
-
-            # save embeddings to cache
-            os.makedirs(path_to_cached_file.parent, exist_ok=True)
-            np.save(str(path_to_cached_file), X)
-        else:
-            # load from cache
-            X = np.load(str(path_to_cached_file))
-
-        return torch.from_numpy(X)
+        return torch.from_numpy(audio)
 
     def get_y(self, entry):
         resolution=1.0
@@ -157,7 +142,7 @@ class Dataset(torch.utils.data.Dataset):
     def load_audio(self, entry):
         assert 'path_to_audio' in entry, f'didnt find a path to audio in {entry}'
         # load audio and set to correct format
-        X = au.io.load_audio_file(entry['path_to_audio'], sample_rate=self.sr)
+        X = au.io.load_audio_file(entry['path_to_audio'], sample_rate=ir.SAMPLE_RATE)
         X = torch.from_numpy(X).float()
         return X
 
