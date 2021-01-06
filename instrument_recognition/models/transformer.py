@@ -1,6 +1,7 @@
 import math
 import torch
 import torch.nn as nn
+from .core import BATCH_FIRST
 
 class TransformerEncoder(nn.Module):
 
@@ -21,10 +22,14 @@ class TransformerEncoder(nn.Module):
         # I personally like (batch, sequence, embedding), so lets
         # reshape as necessary
         
-        x = x.permute(1, 0, 2)
+        if BATCH_FIRST:
+            x = x.permute(1, 0, 2)
+
         x = self.pos_encoder(x)
         x = self.encoder(x)
-        x = x.permute(1, 0, 2)
+
+        if BATCH_FIRST:
+            x = x.permute(1, 0, 2)
 
         return x
 
