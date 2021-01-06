@@ -22,6 +22,7 @@ import tensorflow as tf
 import tensorboard as tb
 tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
 
+import instrument_recognition as ir
 import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 
@@ -127,6 +128,15 @@ class InstrumentDetectionTask(pl.LightningModule):
         if len(batch['X']) == 1:
             batch['X'] = torch.cat([batch['X'], batch['X']], dim=0)
             batch['y'] = torch.cat([batch['y'], batch['y']], dim=0)
+
+        
+
+        # as of now, we are getting tensors shape (batch, sequence, feature)
+        # reshape to (sequence, batch, feature)
+        if not ir.models.BATCH_FIRST:
+            if batch['X'].ndim > 3: raise NotImplementedError()
+            batch['X'] = batch['X'].permute(1, 0, 2)
+            batch['y'] = batch['y'].permute(1, 0, 2)
 
         return batch
 
