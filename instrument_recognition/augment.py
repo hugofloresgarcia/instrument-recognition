@@ -14,7 +14,7 @@ def augment_and_save_record(entry: dict, source_dir: str, dest_dir: str):
     # create output paths 
     output_entry['path_to_record'] = str(dest_dir /  Path(entry['path_to_record']).relative_to(source_dir))
     output_entry['path_to_audio'] = str(dest_dir / Path(entry['path_to_audio']).relative_to(source_dir))
-    output_entry['path_to_effect_params'] = str(dest_dir / f'{str(Path(entry["path_to_record"]).relative_to(source_dir).stem)}-effect_params.json')
+    output_entry['path_to_effect_params'] = str(dest_dir / f'{str(Path(entry["path_to_record"]).relative_to(source_dir).stem)}-effect_params.yaml')
     os.makedirs(Path(output_entry['path_to_record']).parent, exist_ok=True)
 
     audio = au.io.load_audio_file(entry['path_to_audio'], sample_rate=ir.SAMPLE_RATE)
@@ -22,7 +22,7 @@ def augment_and_save_record(entry: dict, source_dir: str, dest_dir: str):
     au.io.write_audio_file(audio, output_entry['path_to_audio'], sample_rate=ir.SAMPLE_RATE, audio_format='wav')
     
     # save effect params and new record
-    ir.utils.data.save_metadata_entry(effect_params, output_entry['path_to_effect_params'], format='json')
+    ir.utils.data.save_metadata_entry(effect_params, output_entry['path_to_effect_params'], format='yaml')
     ir.utils.data.save_metadata_entry(output_entry, output_entry['path_to_record'], format='json')
 
 def augment_dataset(name: str, partition: str):
