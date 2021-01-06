@@ -25,6 +25,8 @@ def debatch(batch):
 
 def remap_classes(records, remap_dict):
     for i, entry in enumerate(records):
+        if 'events' not in entry:
+            raise ValueError(f'entry is missing "events" key: {entry}')
         for event in entry['events']:
             if event['label'] in remap_dict.keys():
                 event['label'] = remap_dict[event['label']]
@@ -34,19 +36,23 @@ def remap_classes(records, remap_dict):
 
 class Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, name: str, partition: str, 
-                 class_subset: list=None, unwanted_classes: list=None):
+    def __init__(self, name: str, partition: str, embedding_name: str = None, 
+                 class_subset: list = None, unwanted_classes: list = None):
         """reads an audio dataset.
 
         the dataset doesn't care how your folder structure is organized, just finds 
         as many metadata (yaml or json) files as it can, and reads each metadata file as a separate data sample. 
         """
-        self.augment = partition == 'train'
-
         # define a root path for our dataset
         self.sr = ir.SAMPLE_RATE
-        self.duration = 10.0
         self.root_dir = ir.DATA_DIR / name / partition
+
+        self.embedding_name
+        if embedding_name is not None:
+            self.cache_dir = ir.CACHE_DIR / embedding_name / name / partition
+            if not self.cache_dir.exists():
+                raise FileNotFoundError((f'{self.cache_dir} not found. run preprocess.py with the correct input arguments'))
+                
         self.y_cache = {}
 
         print(f'loading metadata from {self.root_dir}...')
@@ -67,7 +73,6 @@ class Dataset(torch.utils.data.Dataset):
         # get only a class subset if that is desired
         if class_subset is not None:
             self.filter_metadata_by_class_subset(class_subset)
-        
 
     def __len__(self):
         return len(self.records)
@@ -77,7 +82,7 @@ class Dataset(torch.utils.data.Dataset):
         entry = self.records[index]
 
         # get input
-        print(f'getting {index}')
+        # print(f'getting {index}')
         X = self.get_X(entry)
 
         # get labels
@@ -91,9 +96,6 @@ class Dataset(torch.utils.data.Dataset):
         item = dict(entry)
         item.update(data)
         item['record_index'] = index
-
-        if 'effect_params' in entry:
-            entry['effect_params'] = {}
 
         return item
 
@@ -115,13 +117,22 @@ class Dataset(torch.utils.data.Dataset):
         self.setup_dataset(subset)    
     
     def get_X(self, entry):
-        audio = au.io.load_audio_file(entry['path_to_audio'], self.sr)
+        """ load audio if we don't have an embedding name, else pull embedding from cache
+        """
+        if self.embedding_name is None:
+            audio = au.io.load_audio_file(entry['path_to_audio'], self.sr)
 
-        # truncate any extra samples from scaper
-        if not audio.shape[-1] == entry['duration'] * self.sr:
-            audio = audio[:, 0:int(entry['duration'] * self.sr)]
+            # truncate any extra samples from scaper
+            if not audio.shape[-1] == entry['duration'] * self.sr:
+                audio = audio[:, 0:int(entry['duration'] * self.sr)]
 
-        return torch.from_numpy(audio)
+            return torch.from_numpy(audio)
+        else:
+            path_to_embedding = self.cache_dir / Path(entry['path_to_audio']).with_suffix('.npy')
+            assert path_to_embedding.exists(), f"{path_to_embedding} does not exist :("
+            X = np.load(path_to_embedding)
+            return torch.from_numpy(X)
+
 
     def get_y(self, entry):
         resolution=1.0
@@ -138,13 +149,6 @@ class Dataset(torch.utils.data.Dataset):
         for entry in pbar:
             pbar.set_description(f'preprocessing {Path(entry["path_to_audio"]).name}')
             self.get_X(entry)
-
-    def load_audio(self, entry):
-        assert 'path_to_audio' in entry, f'didnt find a path to audio in {entry}'
-        # load audio and set to correct format
-        X = au.io.load_audio_file(entry['path_to_audio'], sample_rate=ir.SAMPLE_RATE)
-        X = torch.from_numpy(X).float()
-        return X
 
     def load_numpy(self, entry):
         assert 'path_to_npy' in entry, f'didnt find a path to npy in {entry}'
@@ -172,10 +176,12 @@ class Dataset(torch.utils.data.Dataset):
 class DataModule(pl.LightningDataModule):
 
     def __init__(self, name: str, batch_size: int = 64, num_workers: int = 18, 
-                **dataset_kwargs):
+                 use_augmented: bool = True, embedding_name: str = None, **dataset_kwargs):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.use_augmented = use_augmented
+        self.embedding_name = embedding_name
 
         self.collate_fn = CollateBatches()
 
@@ -191,13 +197,19 @@ class DataModule(pl.LightningDataModule):
             help='batch size')
         parser.add_argument('--num_workers', type=int, default=18, 
             help='number of cpus for loading data')
+        parser.add_argument('--use_augmented', type=ir.utils.parser_types.str2bool, default=True, 
+            help='if available, uses the augmented training set.')
+        parser.add_argument('--embedding_name', type=str, 
+            help='if specified, loads embeddings from cache instead of raw audio. The provided ' + 
+                  'embedding_name should be a directory in /cache/')
         return parser
 
     def load_dataset(self):
         # cool! now, lets create the dataset objects
-        self.train_data = Dataset(name=self.name, partition='train', **self.dataset_kwargs)
+        train_partition = 'train-augmented' if Path(ir.DATA_DIR/self.name/'train-augmented').exists() and self.use_augmented else 'train'
+        self.train_data = Dataset(name=self.name, partition=train_partition, embedding_name=embedding_name, **self.dataset_kwargs)
         self.dataset = self.train_data
-        self.test_data = Dataset(name=self.name, partition='test', **self.dataset_kwargs)
+        self.test_data = Dataset(name=self.name, partition='test', embedding_name=embedding_name, **self.dataset_kwargs)
         self.val_data = self.test_data
 
         print('train entries:', len(self.train_data))
