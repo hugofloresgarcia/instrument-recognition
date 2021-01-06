@@ -22,9 +22,10 @@ def create_records_for_scaper_dataset(name: str):
 
         for r in records:
             f = r['path_to_jams']
-            f = str(Path(f).with_suffix(''))
+            f = str(Path(f).with_suffix('.json'))
+            r['path_to_record'] = f
             print(f'saving record {f}')
-            ir.utils.data.save_metadata_entry(r, f)
+            ir.utils.data.save_metadata_entry(r, f, format='json')
 
 def jams_to_records(jam_list):
     records = []
