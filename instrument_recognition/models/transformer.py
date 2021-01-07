@@ -1,7 +1,7 @@
 import math
 import torch
 import torch.nn as nn
-from .core import BATCH_FIRST
+import instrument_recognition as ir
 
 class TransformerEncoder(nn.Module):
 
@@ -22,13 +22,13 @@ class TransformerEncoder(nn.Module):
         # I personally like (batch, sequence, embedding), so lets
         # reshape as necessary
         
-        if BATCH_FIRST:
+        if ir.models.BATCH_FIRST:
             x = x.permute(1, 0, 2)
 
         x = self.pos_encoder(x)
         x = self.encoder(x)
 
-        if BATCH_FIRST:
+        if ir.models.BATCH_FIRST:
             x = x.permute(1, 0, 2)
 
         return x

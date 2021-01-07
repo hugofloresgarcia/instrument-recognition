@@ -1,0 +1,28 @@
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-tiny-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-512-music --model_size tiny --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-small-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-512-music --model_size small --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-mid-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-6144-music --model_size mid --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-huge-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-6144-music --model_size huge --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+
+xxxxxxxxxxxxxx
+
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-tiny-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-512-music --model_size tiny --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_binary_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-small-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-512-music --model_size small --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-mid-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-6144-music --model_size mid --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 
+
+
+source /home/hugo/lab/venv/bin/activate && cd /home/hugo/lab/instrument-recognition && python -m instrument_recognition.train --name mdb-synthetic-mono-mel256-huge-bilstm --version 0 --gpuid 0 --max_epochs 250 --embedding_name openl3-mel256-6144-music --model_size huge --recurrence_type bilstm --dropout 0.3 --dataset_name mdb-synthetic-mono --use_augmented true --batch_size 64 --num_workers 20 --loss_fn weighted_multiclass_cross_entropy --mixup false --mixup_alpha 0.2 --log_epoch_metrics True 

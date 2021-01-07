@@ -47,7 +47,7 @@ class Dataset(torch.utils.data.Dataset):
         self.sr = ir.SAMPLE_RATE
         self.root_dir = ir.DATA_DIR / name / partition
 
-        self.embedding_name
+        self.embedding_name = embedding_name
         if embedding_name is not None:
             self.cache_dir = ir.CACHE_DIR / embedding_name / name / partition
             if not self.cache_dir.exists():
@@ -128,7 +128,7 @@ class Dataset(torch.utils.data.Dataset):
 
             return torch.from_numpy(audio)
         else:
-            path_to_embedding = self.cache_dir / Path(entry['path_to_audio']).with_suffix('.npy')
+            path_to_embedding = self.cache_dir / Path(Path(entry['path_to_audio']).stem).with_suffix('.npy')
             assert path_to_embedding.exists(), f"{path_to_embedding} does not exist :("
             X = np.load(path_to_embedding)
             return torch.from_numpy(X)
@@ -175,7 +175,7 @@ class Dataset(torch.utils.data.Dataset):
 
 class DataModule(pl.LightningDataModule):
 
-    def __init__(self, name: str, batch_size: int = 64, num_workers: int = 18, 
+    def __init__(self, dataset_name: str, batch_size: int = 64, num_workers: int = 18, 
                  use_augmented: bool = True, embedding_name: str = None, **dataset_kwargs):
         super().__init__()
         self.batch_size = batch_size
@@ -185,7 +185,7 @@ class DataModule(pl.LightningDataModule):
 
         self.collate_fn = CollateBatches()
 
-        self.name = name
+        self.name = dataset_name
         self.dataset_kwargs = dataset_kwargs
 
     @classmethod
@@ -207,9 +207,9 @@ class DataModule(pl.LightningDataModule):
     def load_dataset(self):
         # cool! now, lets create the dataset objects
         train_partition = 'train-augmented' if Path(ir.DATA_DIR/self.name/'train-augmented').exists() and self.use_augmented else 'train'
-        self.train_data = Dataset(name=self.name, partition=train_partition, embedding_name=embedding_name, **self.dataset_kwargs)
+        self.train_data = Dataset(name=self.name, partition=train_partition, embedding_name=self.embedding_name, **self.dataset_kwargs)
         self.dataset = self.train_data
-        self.test_data = Dataset(name=self.name, partition='test', embedding_name=embedding_name, **self.dataset_kwargs)
+        self.test_data = Dataset(name=self.name, partition='test', embedding_name=self.embedding_name, **self.dataset_kwargs)
         self.val_data = self.test_data
 
         print('train entries:', len(self.train_data))

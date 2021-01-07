@@ -15,7 +15,6 @@ from instrument_recognition.datasets import DataModule
 def dump_classlist(dm, save_dir):
     # get classlist and number of classes
     classlist = dm.classlist()
-    num_output_units = len(classlist)
     print(f'classlist is: {classlist}')
     with open(os.path.join(save_dir, 'classlist.yaml'), 'w') as f:
         yaml.dump(classlist, f)
@@ -24,11 +23,7 @@ def run_task(hparams):
     # load the datamodule
     print(f'loading datamodule...')
 
-    device = 'cpu' if hparams.gpuid is None else hparams.gpuid
-    transform = ir.preprocess.OpenL3Preprocessor(hparams.preprocessor_name, cuda_device=device)
-
-    dm = DataModule(name=hparams.dataset_name, batch_size=hparams.batch_size, 
-                    num_workers=hparams.num_workers, preprocess_fn=transform)
+    dm = DataModule.from_argparse_args(hparams)
     dm.setup()
     hparams.output_dim = len(dm.classlist())
 
@@ -44,7 +39,7 @@ def run_task(hparams):
     # build task
     print(f'building task...')
     task = InstrumentDetectionTask.from_hparams(model, dm, hparams)
-    
+
     # run train fn and get back test results
     print(f'running task')
     task, result = train_instrument_detection_model(task, name=hparams.name, version=hparams.version,
@@ -52,7 +47,7 @@ def run_task(hparams):
                                     log_dir=ir.LOG_DIR, test=hparams.test)
 
     # save model to torchscript
-    utils.train.save_torchscript_model(task.model, os.path.join(save_dir, 'torchscript_model.pt'))
+    # utils.train.save_torchscript_model(task.model, os.path.join(save_dir, 'torchscript_model.pt'))
 
 if __name__ == "__main__":
     import argparse
@@ -67,7 +62,6 @@ if __name__ == "__main__":
     parser.add_argument('--max_epochs', type=int, default=100)
     parser.add_argument('--test', type=utils.parser_types.str2bool, default=False)
 
-    parser = OpenL3Preprocessor.add_argparse_args(parser)
     parser = Model.add_argparse_args(parser)
     parser = DataModule.add_argparse_args(parser)
     parser = InstrumentDetectionTask.add_argparse_args(parser)

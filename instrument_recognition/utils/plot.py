@@ -134,7 +134,23 @@ def plotly_confusion_matrix(m, labels):
     fig['data'][0]['showscale'] = True
 
     return fig
-    
+
+def plotly_bce_classification_report(classification_report):
+    """ a bar chart visualization of an sklearn classification_report
+    """
+    df = pd.DataFrame.from_dict(classification_report, orient='index')
+
+    # df = pd.DataFrame.from_dict(classification_report, orient='index').reset_index()
+    # df = df.melt(id_vars='index', value_vars=['precision', 'recall', 'f1-score'])
+
+    # fig = px.bar(df, x="index", y='value', color='variable')
+    ax = df.plot.bar(y=['precision', 'recall', 'f1-score'], subplots=True, figsize=(6.8*2, 4.8*2))
+    if isinstance(ax, np.ndarray):
+        ax = ax[0].figure
+    else:
+        ax = ax.figure
+    return ax
+
 def dim_reduce(emb, labels, n_components=3, method='umap', title=''):
     """
     dimensionality reduction for visualization!

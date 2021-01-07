@@ -29,7 +29,9 @@ install_requires = [
     'tqdm', 
     'soundfile',
     'librosa', 
-    'sox']
+    # 'sox',  
+    'uncertainty_metrics', 
+    'sklearn']
 
 if __name__ == '__main__':
     setup(**setup_args, install_requires=install_requires)

@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import torchaudio
 import torchvision
 import pytorch_lightning as pl
-from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta_score, classification_report
 import sklearn
 import matplotlib.pyplot as plt
 import uncertainty_metrics.numpy as um
@@ -40,7 +40,7 @@ class InstrumentDetectionTask(pl.LightningModule):
                  mixup: bool = False, mixup_alpha: float = 0.2,
                  log_epoch_metrics: bool = True):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', 'log_epoch_metrics')
         self.max_epochs = max_epochs
         self.loss_fn = loss_fn
         self.multiclass = 'multiclass' in loss_fn
@@ -76,9 +76,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         parser = parent_parser
         parser.add_argument('--learning_rate', type=float, default=0.0003)
         parser.add_argument('--loss_fn', type=str, default='weighted_multiclass_cross_entropy')
-        parser.add_argument('--mixup', type=bool, default=False)
+        parser.add_argument('--mixup', type=ir.utils.str2bool, default=False)
         parser.add_argument('--mixup_alpha', type=float, default=0.2)
-        parser.add_argument('--log_epoch_metrics', type=bool, default=True)
+        parser.add_argument('--log_epoch_metrics', type=ir.utils.str2bool, default=True)
         return parser
 
     def batch_detach(self, batch):
@@ -116,9 +116,10 @@ class InstrumentDetectionTask(pl.LightningModule):
             yhat = yhat.view(-1, yhat.shape[-1])
             loss = F.cross_entropy(yhat, y, weight=weights)
         elif 'binary_cross_entropy' in self.loss_fn:
+            y = y.contiguous().float()
             y = y.view(-1, y.shape[-1])
             yhat = yhat.view(-1, yhat.shape[-1])
-            loss = F.binary_cross_entropy(yhat, y, weight=weights)
+            loss = F.binary_cross_entropy_with_logits(yhat, y, weight=weights)
         else:
             raise ValueError(f'incorrect loss_fn: {self.loss_fn}')
         
@@ -128,8 +129,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         if len(batch['X']) == 1:
             batch['X'] = torch.cat([batch['X'], batch['X']], dim=0)
             batch['y'] = torch.cat([batch['y'], batch['y']], dim=0)
-
-        
 
         # as of now, we are getting tensors shape (batch, sequence, feature)
         # reshape to (sequence, batch, feature)
@@ -158,10 +157,12 @@ class InstrumentDetectionTask(pl.LightningModule):
         
         # squash down (sequence, batch, n) to (sequence * batch, n) if multiclass
         yhat = yhat.view(-1, yhat.shape[-1])
+        y = y.contiguous()
         y = y.view(-1, y.shape[-1])
 
         probits = F.softmax(yhat, dim=1) if self.multiclass else F.sigmoid(yhat)
         yhat = torch.argmax(probits, dim=1, keepdim=False) if self.multiclass else probits
+        y = torch.argmax(y, dim=1, keepdim=False) if self.multiclass else y
 
         return dict(loss=loss, y=y.detach(), probits=probits.detach(),
                     yhat=yhat.detach(), X=X.detach())
@@ -171,10 +172,11 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         # update the batch with the result
         batch.update(result)
+        del result
 
         # train logging
-        self.log('loss/train', result['loss'].detach().cpu(), on_step=True)
-        self.log('loss/train-epoch', result['loss'].detach().cpu(), on_step=False, on_epoch=True)
+        self.log('loss/train', batch['loss'].detach().cpu(), on_step=True)
+        self.log('loss/train-epoch', batch['loss'].detach().cpu(), on_step=False, on_epoch=True)
 
         # pick and log sample audio
         if batch_idx % 250 == 0:
@@ -182,7 +184,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         
         # self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
 
-        return result['loss']
+        return batch['loss']
 
     def validation_step(self, batch, batch_idx):  
         # get result of forward pass
@@ -197,7 +199,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         # metric logging
         self.log('loss/val', result['loss'].detach().cpu(), logger=True, prog_bar=True)
         self.log('loss_val', result['loss'].detach().cpu(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='val')
+        self.log_sklearn_metrics(batch['yhat'].detach().cpu(), batch['y'].detach().cpu(), prefix='val')
 
         # result['loss'] = result['loss'].detach().cpu()
         return result
@@ -285,6 +287,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         y, yhat = y.permute(1, 0), yhat.permute(1, 0)
         for idx, (tru, probit) in enumerate(zip(y, yhat)):
             label = self.classlist[idx]
+            probit = np.where(probit > 0.5, np.array(1), np.array(0))
             self.log(f'accuracy/{prefix}/{label}', accuracy_score(tru, probit, normalize=True), on_epoch=False)
             self.log(f'precision/{prefix}/{label}', precision_score(tru, probit, average='binary'), on_epoch=False)
             self.log(f'recall/{prefix}/{label}', recall_score(tru, probit,  average='binary'), on_epoch=False)
@@ -292,9 +295,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         
     def log_multiclass_metrics(self, yhat, y, prefix='val'):
         self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True), on_epoch=False)
-        self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'), on_epoch=False)
-        self.log(f'recall/{prefix}', recall_score(y, yhat,  average='micro'), on_epoch=False)
-        self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='micro', beta=1), on_epoch=False)
+        self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'), on_epoch=False)
+        self.log(f'recall/{prefix}', recall_score(y, yhat,  average='weighted'), on_epoch=False)
+        self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='weighted', beta=1), on_epoch=False)
 
     def log_sklearn_metrics(self, yhat, y, prefix='val'):
         if self.multiclass:
@@ -326,7 +329,7 @@ class InstrumentDetectionTask(pl.LightningModule):
                                             str(path_to_audio), 
                                             self.global_step)
         else:
-            raise NotImplementedError
+            pass
 
     def register_all_hooks(self):
         layer_names = self.model.log_layers
@@ -351,7 +354,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         
         # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
         # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
-        if multiclass:
+        if self.multiclass:
             # CONFUSION MATRIX
             conf_matrix = sklearn.metrics.confusion_matrix(
                 y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
@@ -372,10 +375,10 @@ class InstrumentDetectionTask(pl.LightningModule):
 
             # log metrics
             self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
-            self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'))
-            self.log(f'recall/{prefix}', recall_score(y, yhat, average='micro'))
-            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
-            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
+            self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'))
+            self.log(f'recall/{prefix}', recall_score(y, yhat, average='weighted'))
+            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
 
             self.log_uncertainty_metrics(probits, y, prefix)
 
@@ -383,11 +386,17 @@ class InstrumentDetectionTask(pl.LightningModule):
             self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
         else:
             # log metrics
+            yhat = torch.where(yhat > 0.5, torch.tensor(1), torch.tensor(0))
             self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
-            self.log(f'precision/{prefix}', precision_score(y, yhat, average='micro'))
-            self.log(f'recall/{prefix}', recall_score(y, yhat, average='micro'))
-            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
-            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='micro', beta=1))
+            self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'))
+            self.log(f'recall/{prefix}', recall_score(y, yhat, average='weighted'))
+            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+
+            # CLASSIFICATION REPORTS
+            report = classification_report(y, yhat, target_names=self.classlist, output_dict=True)  
+            report_fig = utils.plot.plot_to_image(utils.plot.plotly_bce_classification_report(report))
+            self.logger.experiment.add_image(f'classification_report/{prefix}', report_fig, self.global_step, dataformats='HWC')
 
             self.logger.experiment.add_text(f'report/{prefix}', 
                 classification_report(y, yhat, target_names=self.classlist), self.global_step)
@@ -396,7 +405,7 @@ class InstrumentDetectionTask(pl.LightningModule):
             y = y.t()
             yhat = yhat.t()
             for idx, (ytrue, ypred) in enumerate(zip(y, yhat)):
-                classname = self.classes[idx]
+                classname = self.classlist[idx]
 
                 self.log(f'accuracy/{classname}-{prefix}/epoch', accuracy_score(ytrue, ypred, normalize=True))
                 self.log(f'precision/{classname}-{prefix}/epoch', precision_score(ytrue, ypred))
@@ -468,7 +477,7 @@ def train_instrument_detection_model(task,
         accelerator = None
 
     # hardcode some 
-    from pytorch_lightning import  Trainer
+    from pytorch_lightning import Trainer
     trainer = Trainer(
         accelerator=accelerator,
         # distributed_backend='dp',

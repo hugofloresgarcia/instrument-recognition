@@ -10,19 +10,19 @@ BATCH_FIRST = False
 
 recurrent_model_sizes = {
     'lstm': {
-        'num_layers': 1, 
+        'num_layers': 2, 
         'num_heads': None},
     'bilstm': {
-        'num_layers': 1, 
+        'num_layers': 2, 
         'num_heads': None},
     'gru': {
-        'num_layers': 1, 
+        'num_layers': 2, 
         'num_heads': None},
     'bigru': {
-        'num_layers': 1, 
+        'num_layers': 2, 
         'num_heads': None},
     'transformer': {
-        'num_layers': 1, 
+        'num_layers': 2, 
         'num_heads': 4},
 }
 
@@ -33,6 +33,7 @@ model_sizes = {
     'huge':  dict(d_input=6144, d_intermediate=6144, has_linear_proj=False)
 }
 
+#TODO: add batchnorm
 class Model(pl.LightningModule):
 
     def __init__(self, model_size: str, output_dim: int, 
