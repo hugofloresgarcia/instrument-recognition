@@ -54,17 +54,18 @@ class Model(pl.LightningModule):
 
         # add the proper linear transformation depending on model size
         if self.has_linear_proj:
-            self.fc_proj = nn.Linear(d_input, d_intermediate)
+            self.fc_proj = nn.Sequential(nn.BatchNorm1d(d_input), nn.Linear(d_input, d_intermediate))
 
         # add recurrent layers
         num_layers = recurrent_model_sizes[recurrence_type]['num_layers']
         num_heads = recurrent_model_sizes[recurrence_type]['num_heads']
         recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=d_intermediate, num_layers=num_layers, 
-                                                        d_hidden=d_intermediate, num_heads=num_heads, dropout=dropout)
+                                                     d_hidden=d_intermediate, num_heads=num_heads, dropout=dropout)
+        # recurrent_layer = nn.Sequential(nn.BatchNorm1d(d_intermediate), recurrent_layer)
         self.__setattr__(name=recurrence_type, value=recurrent_layer)
 
         # add the fully connected classifier :)
-        self.fc_output = nn.Linear(r_dim, output_dim)
+        self.fc_output = nn.Sequential(nn.BatchNorm1d(r_dim), nn.Linear(r_dim, output_dim))
     
     @classmethod
     def from_hparams(cls, hparams):
@@ -90,7 +91,11 @@ class Model(pl.LightningModule):
         assert x.shape[-1] == model_sizes[self.model_size]['d_input']
 
         if self.has_linear_proj:
+            seq_dim, batch_dim, feature_dim = x.shape
+            x = x.contiguous()
+            x = x.view(-1, feature_dim)
             x = self.fc_proj(x)
+            x = x.view(seq_dim, batch_dim, -1)
         
         recurrent_layer = self.__getattr__(self.recurrence_type)
         if 'lstm' in self.recurrence_type \
@@ -99,7 +104,10 @@ class Model(pl.LightningModule):
         else:
             x = recurrent_layer(x)
 
+        seq_dim, batch_dim, feature_dim = x.shape
+        x = x.view(-1, feature_dim)
         x = self.fc_output(x)
+        x = x.view(seq_dim, batch_dim, -1)
 
         return x
 
