@@ -13,6 +13,11 @@ import instrument_recognition as ir
 import instrument_recognition.datasets 
 from instrument_recognition import utils
 
+ALL_MODEL_NAMES = ('openl3-mel128-6144-music', 'openl3-mel256-6144-music',
+                  'openl3-mel128-512-music', 'openl3-mel256-512-music',
+                  'openl3-mel128-6144-env', 'openl3-mel256-6144-env',
+                  'openl3-mel128-512-env', 'openl3-mel256-512-env')
+
 class OpenL3Preprocessor(pl.LightningModule):
 
     def __init__(self, model_name: str = 'openl3-mel256-6144-music', cuda_device=None):
@@ -98,16 +103,16 @@ if __name__ == "__main__":
 
     parser.add_argument('--name', type=str)
     parser.add_argument('--model', type=str)
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--num_workers', type=int, default=18)
     parser.add_argument('--device', type=int, default=0)
 
     args = parser.parse_args()
-    preprocess_dataset(args.name, args.model, args.batch_size, args.num_workers, args.device)
+    if args.model == 'all':
+        for model in ALL_MODEL_NAMES:
+            preprocess_dataset(args.name, model, args.batch_size, args.num_workers, args.device)
+    else:
+        preprocess_dataset(args.name, args.model, args.batch_size, args.num_workers, args.device)
 
-    # for model in ('openl3-mel128-6144-music', 'openl3-mel256-6144-music',
-    #               'openl3-mel128-512-music', 'openl3-mel256-512-music',
-    #               'openl3-mel128-6144-env', 'openl3-mel256-6144-env',
-    #               'openl3-mel128-512-env', 'openl3-mel256-512-env'):
-    #     preprocess_dataset(args.name, model, args.batch_size, args.num_workers, args.device)
+    
     
