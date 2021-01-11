@@ -3,6 +3,7 @@ import json
 import glob
 import yaml
 from pathlib import Path
+import warnings
 import collections
 
 import numpy as np
@@ -48,10 +49,15 @@ def get_one_hot_matrix(record, classlist: list, resolution: float = 1.0):
         start_time = event['start_time']
         end_time = event['end_time']
 
+        # if end_time > duration:
+        #     warnings.warn(f'event end time is longer than duration.')
+
         start_idx = time_axis.index(quantize_floor(start_time, duration, duration / resolution))
 
         ceil = quantize_ceil(end_time, duration, duration / resolution)
-        ceil = ceil if ceil != duration else time_axis[-1]
+        # truncate to the last bin (determined by the audio duration)
+        # events cant be longer than the length of the track anyway
+        ceil = ceil if ceil < duration else time_axis[-1]
         end_idx = time_axis.index(ceil)
 
         label_idx = classlist.index(event['label'])

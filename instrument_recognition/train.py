@@ -68,4 +68,8 @@ if __name__ == "__main__":
 
     hparams = parser.parse_args()
 
+    # create custom automatic name if auto
+    if hparams.name.lower() == 'auto':
+        hparams.name = f'{hparams.dataset_name}-{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}'
+
     run_task(hparams)
