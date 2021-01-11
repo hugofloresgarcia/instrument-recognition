@@ -45,6 +45,7 @@ class Model(pl.LightningModule):
         self.model_size = model_size
         self.recurrence_type = recurrence_type
         self.has_linear_proj = model_sizes[model_size]['has_linear_proj']
+        self.has_recurrent_layer = False if recurrence_type.lower() == 'none' else True
 
         assert self.output_dim > 0
         assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
@@ -57,12 +58,15 @@ class Model(pl.LightningModule):
             self.fc_proj = nn.Sequential(nn.BatchNorm1d(d_input), nn.Linear(d_input, d_intermediate))
 
         # add recurrent layers
-        num_layers = recurrent_model_sizes[recurrence_type]['num_layers']
-        num_heads = recurrent_model_sizes[recurrence_type]['num_heads']
-        recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=d_intermediate, num_layers=num_layers, 
-                                                     d_hidden=d_intermediate, num_heads=num_heads, dropout=dropout)
-        # recurrent_layer = nn.Sequential(nn.BatchNorm1d(d_intermediate), recurrent_layer)
-        self.__setattr__(name=recurrence_type, value=recurrent_layer)
+        if self.has_recurrent_layer:
+            num_layers = recurrent_model_sizes[recurrence_type]['num_layers']
+            num_heads = recurrent_model_sizes[recurrence_type]['num_heads']
+            recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=d_intermediate, num_layers=num_layers, 
+                                                        d_hidden=d_intermediate, num_heads=num_heads, dropout=dropout)
+            # recurrent_layer = nn.Sequential(nn.BatchNorm1d(d_intermediate), recurrent_layer)
+            self.__setattr__(name=recurrence_type, value=recurrent_layer)
+        else:
+            r_dim = d_intermediate
 
         # add the fully connected classifier :)
         self.fc_output = nn.Sequential(nn.BatchNorm1d(r_dim), nn.Linear(r_dim, output_dim))
@@ -79,7 +83,7 @@ class Model(pl.LightningModule):
         parser = parent_parser
         parser.add_argument('--model_size', type=str, required=True, 
             help=f'model size. one of {model_sizes.keys()}')
-        parser.add_argument('--recurrence_type', type=str, default='bilstm', 
+        parser.add_argument('--recurrence_type', type=str, default='none',
             help=f'type of recurrence. one of {recurrent_model_sizes.keys()}')
         parser.add_argument('--dropout', type=float, default=0.3, 
             help='dropout for model')
@@ -97,14 +101,16 @@ class Model(pl.LightningModule):
             x = self.fc_proj(x)
             x = x.view(seq_dim, batch_dim, -1)
         
-        recurrent_layer = self.__getattr__(self.recurrence_type)
-        if 'lstm' in self.recurrence_type \
-            or 'gru' in self.recurrence_type:
-            x, hiddens = recurrent_layer(x)
-        else:
-            x = recurrent_layer(x)
+        if self.has_recurrent_layer:
+            recurrent_layer = self.__getattr__(self.recurrence_type)
+            if 'lstm' in self.recurrence_type \
+                or 'gru' in self.recurrence_type:
+                x, hiddens = recurrent_layer(x)
+            else:
+                x = recurrent_layer(x)
 
         seq_dim, batch_dim, feature_dim = x.shape
+        x = x.contiguous()
         x = x.view(-1, feature_dim)
         x = self.fc_output(x)
         x = x.view(seq_dim, batch_dim, -1)
