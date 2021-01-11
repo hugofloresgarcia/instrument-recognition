@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+    
         {
             "name": "mdb-synthetic-mono-mel256-tiny-bilstm-bce",
             "type": "python",
@@ -15,7 +16,7 @@
                 "--name",                "mdb-synthetic-mono-mel256-tiny-bilstm-bce",
                 "--version",             "1",
                 "--gpuid",               "0",
-                "--max_epochs",          "50",
+                "--max_epochs",          "250",
 
                 "--embedding_name",      "openl3-mel256-512-music",
                 "--model_size",          "tiny",
@@ -34,17 +35,17 @@
             ]
         },
         {
-            "name": "mdb-synthetic-mono-mel256-small-bilstm",
+            "name": "mdb-synthetic-mono-mel256-small-bilstm-batchnorm",
             "type": "python",
             "request": "launch",
             
             "console": "integratedTerminal", 
             "module": "instrument_recognition.train",  
             "args": [
-                "--name",                "mdb-synthetic-mono-mel256-small-bilstm",
+                "--name",                "mdb-synthetic-mono-mel256-small-bilstm-batchnorm",
                 "--version",             "1",
                 "--gpuid",               "1",
-                "--max_epochs",          "50",
+                "--max_epochs",          "250",
 
                 "--embedding_name",      "openl3-mel128-512-music",
                 "--model_size",          "small",

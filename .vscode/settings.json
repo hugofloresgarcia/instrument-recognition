@@ -2,6 +2,6 @@
     "python.linting.pylintEnabled": true,
     "python.linting.pydocstyleEnabled": false,
     "python.linting.enabled": true,
-    "python.pythonPath": "~/lab/venv/bin/python",
+    "python.pythonPath": "/home/hugo/lab/venv/bin/python",
     "jupyter.jupyterServerType": "local"
 }

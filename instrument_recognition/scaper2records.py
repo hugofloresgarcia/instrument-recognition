@@ -127,7 +127,6 @@ def test_quantize():
     assert quantize_floor(0.2301, 10, 40, 4, 0.9) == 0.25
     assert quantize_ceil(0.2301, 10, 40, 4, 0.1) == 0.25
 
-
 if __name__ == "__main__":
     import argparse
 

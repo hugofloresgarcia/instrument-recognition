@@ -9,7 +9,7 @@ import audio_utils as au
 import instrument_recognition as ir
 import instrument_recognition.utils as utils
 
-unwanted_classes = ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal',
+unwanted_classes =  ['Main System', 'claps', 'fx/processed sound', 'tuba', 'piccolo', 'cymbal',
                      'glockenspiel', 'tambourine', 'timpani', 'snare drum', 'clarinet section',
                       'flute section', 'tenor saxophone', 'trumpet section']
 
