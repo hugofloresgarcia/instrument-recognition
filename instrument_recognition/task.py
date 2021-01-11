@@ -37,12 +37,14 @@ class InstrumentDetectionTask(pl.LightningModule):
                  max_epochs: int = 100,
                  learning_rate: float = 0.0003,
                  loss_fn: str = 'weighted_multiclass_cross_entropy', 
+                 seq_pooling_fn: str = 'none',
                  mixup: bool = False, mixup_alpha: float = 0.2,
                  log_epoch_metrics: bool = True):
         super().__init__()
         self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', 'log_epoch_metrics')
         self.max_epochs = max_epochs
         self.loss_fn = loss_fn
+        self.seq_pooling_fn = None if  seq_pooling_fn.lower() == 'none' else seq_pooling_fn
         self.multiclass = 'multiclass' in loss_fn
         self.mixup = mixup
         self.mixup_alpha = mixup_alpha
@@ -76,6 +78,10 @@ class InstrumentDetectionTask(pl.LightningModule):
         parser = parent_parser
         parser.add_argument('--learning_rate', type=float, default=0.0003)
         parser.add_argument('--loss_fn', type=str, default='weighted_multiclass_cross_entropy')
+        parser.add_argument('--seq_pooling_fn', type=str, default='none', 
+            help='if doing multiple instance_learning, '\
+                    'this will pool sequence level predictions to a single instance prediction. '\
+                    'if none, no pooling is done.')
         parser.add_argument('--mixup', type=ir.utils.str2bool, default=False)
         parser.add_argument('--mixup_alpha', type=float, default=0.2)
         parser.add_argument('--log_epoch_metrics', type=ir.utils.str2bool, default=True)
@@ -114,11 +120,26 @@ class InstrumentDetectionTask(pl.LightningModule):
             # we want y to be shape (batch * sequence) and yhat (batch, sequence, num_classes)
             y = torch.argmax(y, dim=-1).view(-1)
             yhat = yhat.view(-1, yhat.shape[-1])
+
+            if self.seq_pooling_fn is not None:
+                raise NotImplementedError('pooling not implemented for multiclass cross entropy')
+
             loss = F.cross_entropy(yhat, y, weight=weights)
         elif 'binary_cross_entropy' in self.loss_fn:
             y = y.contiguous().float()
-            y = y.view(-1, y.shape[-1])
-            yhat = yhat.view(-1, yhat.shape[-1])
+            if self.seq_pooling_fn is not None:
+                # pool the sequence dim and get rid of it
+                y = torch.softmax(y, dim=0)
+                y = torch.argmax(y, dim=0, keepdim=False)
+                yhat = torch.softmax(y, dim=0)
+                yhat = torch.argmax(y, dim=0, keepdim=False)
+
+                print(y.shape)
+                print(yhat.shape)
+                exit()
+            else:
+                y = y.view(-1, y.shape[-1])
+                yhat = yhat.view(-1, yhat.shape[-1])
             loss = F.binary_cross_entropy_with_logits(yhat, y, weight=weights)
         else:
             raise ValueError(f'incorrect loss_fn: {self.loss_fn}')
@@ -219,7 +240,7 @@ class InstrumentDetectionTask(pl.LightningModule):
     #     self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='test')
 
     #     return result
-    
+
     # OPTIM
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(
