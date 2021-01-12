@@ -58,7 +58,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.max_epochs = max_epochs
         self.loss_fn = loss_fn
         self.seq_pooling_fn = None if  seq_pooling_fn.lower() == 'none' else seq_pooling_fn
-        self.multiclass = not 'bce' in loss_fn
+        self.multiclass = 'bce' not in loss_fn
         self.mixup = mixup
         self.mixup_alpha = mixup_alpha
         self.learning_rate = learning_rate
