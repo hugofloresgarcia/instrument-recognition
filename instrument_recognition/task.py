@@ -13,7 +13,8 @@ import torch.nn.functional as F
 import torchaudio
 import torchvision
 import pytorch_lightning as pl
-from sklearn.metrics import accuracy_score, precision_score, recall_score, fbeta_score, classification_report
+from sklearn.metrics import accuracy_score, precision_score, \
+                        recall_score, fbeta_score, classification_report
 import sklearn
 import matplotlib.pyplot as plt
 import uncertainty_metrics.numpy as um

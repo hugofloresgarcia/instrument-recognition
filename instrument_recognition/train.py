@@ -22,7 +22,6 @@ def dump_classlist(dm, save_dir):
 def run_task(hparams):
     # load the datamodule
     print(f'loading datamodule...')
-
     dm = DataModule.from_argparse_args(hparams)
     dm.setup()
     hparams.output_dim = len(dm.classlist())

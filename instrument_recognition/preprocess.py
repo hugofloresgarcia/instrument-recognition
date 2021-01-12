@@ -18,47 +18,14 @@ ALL_MODEL_NAMES = ('openl3-mel128-6144-music', 'openl3-mel256-6144-music',
                   'openl3-mel128-6144-env', 'openl3-mel256-6144-env',
                   'openl3-mel128-512-env', 'openl3-mel256-512-env')
 
-class OpenL3Preprocessor(pl.LightningModule):
-
-    def __init__(self, model_name: str = 'openl3-mel256-6144-music', cuda_device=None):
-        super().__init__()
-        self.save_hyperparameters()
-        self.name = model_name
-        _, input_repr, embedding_size, content_type = model_name.split('-')
-        self.embedding_model = torchopenl3.OpenL3Embedding(input_repr=input_repr, 
-                                                    embedding_size=int(embedding_size), 
-                                                    content_type=content_type, 
-                                                    pretrained=True)
-        
-        self.cuda_device = cuda_device
-    
-    @classmethod
-    def from_hparams(cls, hparams):
-        obj = cls(hparams.preprocessor_name)
-        obj.hparams = hparams
-        return obj
-    
-    @classmethod
-    def add_argparse_args(cls, parent_parser):
-        parser = parent_parser
-        parser.add_argument('--preprocessor_name', type=str, default='openl3-mel256-6144-music')
-        return parser
-    
-    def __call__(self, audio, sr, augment=False):
-        # add augmentation here?
-        if augment:
-            audio, effect_params = utils.effects.augment_from_array_to_array(audio, sr)
-
-        # embed using openl3 model
-        embeddings = torchopenl3.embed(model=self.embedding_model, audio=audio, 
-                                    sample_rate=sr, device=self.cuda_device)
-        
-        return embeddings
-
-def preprocess_dataset(name: str, model_name: str, batch_size: int, num_workers: int, device: int = None):
-    _, input_repr, embedding_size, content_type = model_name.split('-')
+def get_openl3_model_from_str(name: str):
+    _, input_repr, embedding_size, content_type = name.split('-')
     model = torchopenl3.OpenL3Embedding(input_repr=input_repr, embedding_size=int(embedding_size), 
                                         content_type=content_type, pretrained=True)
+    return model
+
+def preprocess_dataset(name: str, model_name: str, batch_size: int, num_workers: int, device: int = None):
+    model = get_openl3_model_from_str(name)
     if device is not None:
         model = model.to(device)
 
