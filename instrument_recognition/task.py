@@ -355,23 +355,8 @@ class InstrumentDetectionTask(pl.LightningModule):
                                             metadata=metadata, global_step=self.global_step)
 
     def log_random_sample(self, batch, title='sample'):
-        #TODO: need to add an if multiclass thing here
-        if self.multiclass:
-            batch = self.batch_detach(batch)
-            idx = np.random.randint(0, len(batch['X']))
-            pred = self.classlist[batch['yhat'][idx]]
-            truth = self.classlist[batch['y'][idx]]
-            path_to_audio = batch['path_to_audio'][idx]
-
-            self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
-                f'pred: {pred}\n truth:{truth}', 
-                self.global_step)
-
-            self.logger.experiment.add_text(f'{title}-path_to_audio/{truth}', 
-                                            str(path_to_audio), 
-                                            self.global_step)
-        else:
-            pass
+        # NOTE: the old code here did not work for audio
+        return
 
     def register_all_hooks(self):
         layer_names = self.model.log_layers
