@@ -172,9 +172,12 @@ class InstrumentDetectionTask(pl.LightningModule):
         # as of now, we are getting tensors shape (batch, sequence, feature)
         # reshape to (sequence, batch, feature)
         if not ir.models.BATCH_FIRST:
-            if batch['X'].ndim > 3: raise NotImplementedError()
-            batch['X'] = batch['X'].permute(1, 0, 2)
-            batch['y'] = batch['y'].permute(1, 0, 2)
+            if batch['X'].ndim == 3: 
+                batch['X'] = batch['X'].permute(1, 0, 2)
+                batch['y'] = batch['y'].permute(1, 0, 2)
+            elif batch['X'].ndim == 4:
+                batch['X'] = batch['X'].permute(1, 0, 2, 3)
+                batch['y'] = batch['y'].permute(1, 0, 2)
 
         return batch
 
