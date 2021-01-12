@@ -31,12 +31,25 @@ def split(a, n):
     k, m = divmod(len(a), n)
     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 
+def pool(x: torch.Tensor, dim: int = 0, clip=False):
+    # TODO: if alpha is a trainable parameter, this 
+    # could be turned into an nn.Module and become autopool
+    alpha = torch.ones(x.shape[-1]).type_as(x)
+    x = torch.sum(
+            x * torch.exp(alpha * x)
+                    /
+            torch.sum(torch.exp(alpha * x), dim=dim), dim=dim, keepdim=False)
+    if clip:
+        x[x != x] = 0
+        x = x.clip(min=0, max=1)
+    return x
+
 class InstrumentDetectionTask(pl.LightningModule):
 
     def __init__(self, model, datamodule, 
                  max_epochs: int = 100,
                  learning_rate: float = 0.0003,
-                 loss_fn: str = 'weighted_multiclass_cross_entropy', 
+                 loss_fn: str = 'wce', 
                  seq_pooling_fn: str = 'none',
                  mixup: bool = False, mixup_alpha: float = 0.2,
                  log_epoch_metrics: bool = True):
@@ -45,7 +58,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.max_epochs = max_epochs
         self.loss_fn = loss_fn
         self.seq_pooling_fn = None if  seq_pooling_fn.lower() == 'none' else seq_pooling_fn
-        self.multiclass = 'multiclass' in loss_fn
+        self.multiclass = not 'bce' in loss_fn
         self.mixup = mixup
         self.mixup_alpha = mixup_alpha
         self.learning_rate = learning_rate
@@ -67,6 +80,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         obj = cls(model, datamodule,
                     learning_rate=hparams.learning_rate, 
                     loss_fn=hparams.loss_fn, 
+                    seq_pooling_fn=hparams.seq_pooling_fn,
                     mixup=hparams.mixup,
                     mixup_alpha=hparams.mixup_alpha, 
                     log_epoch_metrics=hparams.log_epoch_metrics)
@@ -77,7 +91,7 @@ class InstrumentDetectionTask(pl.LightningModule):
     def add_argparse_args(cls, parent_parser):
         parser = parent_parser
         parser.add_argument('--learning_rate', type=float, default=0.0003)
-        parser.add_argument('--loss_fn', type=str, default='weighted_multiclass_cross_entropy')
+        parser.add_argument('--loss_fn', type=str, default='wce')
         parser.add_argument('--seq_pooling_fn', type=str, default='none', 
             help='if doing multiple instance_learning, '\
                     'this will pool sequence level predictions to a single instance prediction. '\
@@ -111,10 +125,14 @@ class InstrumentDetectionTask(pl.LightningModule):
     #-------------------------------
     #---------- TRAINING -----------
     #-------------------------------
-    
+    #TODO: need to refactor all the if "seq_pooling_fn" and if "loss_fn" statements to their own methods
     def criterion(self, yhat, y):
-        weights = self.class_weights if 'weighted' in self.loss_fn else None
-        if 'multiclass_cross_entropy' in self.loss_fn:
+        # NOTE: loss functions explained. 
+        #  "ce" stands for cross entropy (for multiclass scenarios)
+        # "bce" stands for binary cross entropy (for multiclass, multilabel scenarios)
+        # if the letter "w" is present, the loss function will be weighted
+        weights = self.class_weights if 'w' in self.loss_fn else None
+        if 'ce' in self.loss_fn and not 'b' in self.loss_fn:
             # take the argmax of the y matrix. 
             # y and yhat matrix should be shape (batch, sequence, num_classes)
             # we want y to be shape (batch * sequence) and yhat (batch, sequence, num_classes)
@@ -125,18 +143,18 @@ class InstrumentDetectionTask(pl.LightningModule):
                 raise NotImplementedError('pooling not implemented for multiclass cross entropy')
 
             loss = F.cross_entropy(yhat, y, weight=weights)
-        elif 'binary_cross_entropy' in self.loss_fn:
+        elif 'bce' in self.loss_fn:
             y = y.contiguous().float()
             if self.seq_pooling_fn is not None:
                 # pool the sequence dim and get rid of it
-                y = torch.softmax(y, dim=0)
-                y = torch.argmax(y, dim=0, keepdim=False)
-                yhat = torch.softmax(y, dim=0)
-                yhat = torch.argmax(y, dim=0, keepdim=False)
-
-                print(y.shape)
-                print(yhat.shape)
-                exit()
+                # a = yhat[:, 0, 0:5].detach().cpu().numpy()
+                # print(a)
+                # print(yhat[:, 0:2, 0:2])
+                y = pool(y, dim=0, clip=True)
+                yhat = pool(yhat, dim=0, clip=False)
+                # print(yhat[0, 0:5].detach().cpu().numpy())
+                # print(yhat[0:2, 0:2])
+                # exit()
             else:
                 y = y.view(-1, y.shape[-1])
                 yhat = yhat.view(-1, yhat.shape[-1])
