@@ -119,9 +119,6 @@ class InstrumentDetectionTask(pl.LightningModule):
     def val_dataloader(self):
         return self.datamodule.val_dataloader()
 
-    # def test_dataloader(self):
-    #     return self.datamodule.test_dataloader()
-
     #-------------------------------
     #---------- TRAINING -----------
     #-------------------------------
@@ -147,14 +144,8 @@ class InstrumentDetectionTask(pl.LightningModule):
             y = y.contiguous().float()
             if self.seq_pooling_fn is not None:
                 # pool the sequence dim and get rid of it
-                # a = yhat[:, 0, 0:5].detach().cpu().numpy()
-                # print(a)
-                # print(yhat[:, 0:2, 0:2])
                 y = pool(y, dim=0, clip=True)
                 yhat = pool(yhat, dim=0, clip=False)
-                # print(yhat[0, 0:5].detach().cpu().numpy())
-                # print(yhat[0:2, 0:2])
-                # exit()
             else:
                 y = y.view(-1, y.shape[-1])
                 yhat = yhat.view(-1, yhat.shape[-1])
@@ -220,8 +211,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         # pick and log sample audio
         if batch_idx % 250 == 0:
             self.log_random_sample(batch, title='train-sample')
-        
-        # self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='train')
 
         return batch['loss']
 
@@ -240,24 +229,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log('loss_val', result['loss'].detach().cpu(), on_step=False, on_epoch=True, prog_bar=True)
         self.log_sklearn_metrics(batch['yhat'].detach().cpu(), batch['y'].detach().cpu(), prefix='val')
 
-        # result['loss'] = result['loss'].detach().cpu()
         return result
-
-    # def test_step(self, batch, batch_idx):
-    #     # get result of forward pass
-    #     result = self._main_step(batch,batch_idx)
-    #     # update the batch with the result 
-    #     batch.update(result)
-
-    #     # pick and log sample audio
-    #     if batch_idx % 100 == 0:
-    #         self.log_random_sample(batch, title='test-sample')
-
-    #     # metric logging
-    #     self.log('loss/test', result['loss'].detach().cpu(), logger=True)     
-    #     self.log_sklearn_metrics(batch['yhat'], batch['y'], prefix='test')
-
-    #     return result
 
     # OPTIM
     def configure_optimizers(self):
@@ -519,7 +491,6 @@ def train_instrument_detection_model(task,
     from pytorch_lightning import Trainer
     trainer = Trainer(
         accelerator=accelerator,
-        # distributed_backend='dp',
         log_every_n_steps=100,
         max_epochs=max_epochs,
         callbacks=callbacks,
@@ -530,7 +501,6 @@ def train_instrument_detection_model(task,
         weights_summary='full', 
         log_gpu_memory=True, 
         gpus=gpus,
-        # profiler=True,
         profiler=pl.profiler.SimpleProfiler(
                     output_filename=os.path.join(log_dir, 'profiler-report.txt')), 
         gradient_clip_val=1, 
