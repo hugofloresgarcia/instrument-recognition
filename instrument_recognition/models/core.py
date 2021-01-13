@@ -33,6 +33,22 @@ model_sizes = {
     'huge':  dict(d_input=6144, d_intermediate=6144, has_linear_proj=False)
 }
 
+class Embedding(nn.Module):
+    """ stack of linear layers with
+    """
+
+    def __init__(self, d_embedding: int, depth: int):
+        assert depth > 0
+
+        self.layers = nn.ModuleList([
+            nn.Sequential(
+                nn.BatchNorm1d(d_embedding),
+                nn.Linear(d_embedding, d_embedding)
+             ) for d in range(depth)])
+    
+    def forward(self, )
+        
+
 #TODO: add batchnorm
 class Model(pl.LightningModule):
 
@@ -55,7 +71,11 @@ class Model(pl.LightningModule):
 
         # add the proper linear transformation depending on model size
         if self.has_linear_proj:
-            self.fc_proj = nn.Sequential(nn.BatchNorm1d(d_input), nn.Linear(d_input, d_intermediate))
+            self.fc_proj = nn.Sequential(
+                nn.BatchNorm1d(d_input), 
+                nn.Linear(d_input, d_intermediate), 
+                nn.ReLU()
+            )
 
         # add recurrent layers
         if self.has_recurrent_layer:
