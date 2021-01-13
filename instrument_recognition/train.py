@@ -8,7 +8,6 @@ import pytorch_lightning as pl
 import instrument_recognition as ir
 import instrument_recognition.utils as utils
 from instrument_recognition.task import InstrumentDetectionTask, train_instrument_detection_model
-from instrument_recognition.preprocess import OpenL3Preprocessor
 from instrument_recognition.models import Model
 from instrument_recognition.datasets import DataModule
 
@@ -68,7 +67,7 @@ if __name__ == "__main__":
     hparams = parser.parse_args()
 
     # create custom automatic name if auto
-    if hparams.name.lower() == 'auto':
-        hparams.name = f'{hparams.dataset_name}-{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}'
+    if hparams.name.lower()[0:4] == 'auto':
+        hparams.name = f'{hparams.dataset_name}-{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}' + hparams.name[4:]
 
     run_task(hparams)

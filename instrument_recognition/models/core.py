@@ -142,7 +142,6 @@ def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers:
 
 if __name__ == '__main__':
     from itertools import product
-    from torchsummaryX import summary
     # get a param count for all models
     for size, recurrence_type in product(model_sizes.keys(), recurrent_model_sizes.keys()):
         model = Model(model_size=size, output_dim=19, recurrence_type=recurrence_type)
