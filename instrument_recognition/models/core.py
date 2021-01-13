@@ -38,6 +38,7 @@ class Embedding(nn.Module):
     """
 
     def __init__(self, d_embedding: int, depth: int):
+        super().__init__()
         assert depth > 0
 
         self.layers = nn.ModuleList([
@@ -116,20 +117,30 @@ class Model(pl.LightningModule):
             help='dropout for model')
         return parser
 
+    def _linear(self, x, layer):
+        #input: collapse sequence and batch dims
+        assert not BATCH_FIRST
+        seq_dim, batch_dim, feature_dim = x.shape
+        x = x.contiguous()
+        x = x.view(-1, feature_dim)
+
+        x = layer(x)
+
+        # output: expand sequence and batch dims
+        x = x.view(seq_dim, batch_dim, -1)
+        return x
+
+
     def forward(self, x):
         # input should be (sequence, batch, embedding)
         assert x.ndim == 3
         assert x.shape[-1] == model_sizes[self.model_size]['d_input']
 
         if self.has_linear_proj:
-            seq_dim, batch_dim, feature_dim = x.shape
-            x = x.contiguous()
-            x = x.view(-1, feature_dim)
-            x = self.fc_proj(x)
-            x = x.view(seq_dim, batch_dim, -1)
+            x = self._linear(x, self.fc_proj)
 
-        # pass through intermediate embedding model
-        x = self.intermediate_embedding(x)
+        # pass through intermediate embedding
+        x = self._linear(x, self.intermediate_embedding)
         
         if self.has_recurrent_layer:
             recurrent_layer = self.__getattr__(self.recurrence_type)
