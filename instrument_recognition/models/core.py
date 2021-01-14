@@ -27,7 +27,7 @@ recurrent_model_sizes = {
 }
 
 model_sizes = {
-    'vggish-tiny': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
+    'vggish': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
     'tiny':  dict(d_input=512,  d_intermediate=128, has_linear_proj=True),
     'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=False),
     'mid':   dict(d_input=6144, d_intermediate=512, has_linear_proj=True),
