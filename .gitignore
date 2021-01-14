@@ -146,3 +146,6 @@ data/*
 test-tubes/*
 !test-tubes/.gitkeep
 test-tubes/
+
+# compressed files
+*.tgz
