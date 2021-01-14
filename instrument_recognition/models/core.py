@@ -27,6 +27,7 @@ recurrent_model_sizes = {
 }
 
 model_sizes = {
+    'vggish-tiny': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
     'tiny':  dict(d_input=512,  d_intermediate=128, has_linear_proj=True),
     'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=False),
     'mid':   dict(d_input=6144, d_intermediate=512, has_linear_proj=True),
@@ -52,7 +53,6 @@ class Embedding(nn.Module):
         for layer in self.layers:
             x = x + layer(x)
         return x
-        
 
 #TODO: add batchnorm
 class Model(pl.LightningModule):
@@ -183,6 +183,7 @@ def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers:
 
 if __name__ == '__main__':
     from itertools import product
+    from torchsummaryX import summary
     # get a param count for all models
     for size, recurrence_type in product(model_sizes.keys(), recurrent_model_sizes.keys()):
         model = Model(model_size=size, output_dim=19, recurrence_type=recurrence_type)
