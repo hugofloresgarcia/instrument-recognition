@@ -59,7 +59,7 @@ class Embedding(nn.Module):
 class Model(pl.LightningModule):
 
     def __init__(self, model_size: str, output_dim: int, 
-               recurrence_type: str = 'bilstm', dropout: float = 0.3):
+               recurrence_type: str = 'bilstm', dropout: float = 0.3, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.output_dim = output_dim
@@ -103,8 +103,7 @@ class Model(pl.LightningModule):
     
     @classmethod
     def from_hparams(cls, hparams):
-        obj = cls(model_size=hparams.model_size, output_dim=hparams.output_dim, 
-                           recurrence_type=hparams.recurrence_type, dropout=hparams.dropout)
+        obj = cls(**vars(hparams))
         obj.hparams = hparams
         return obj
 
@@ -149,6 +148,7 @@ class Model(pl.LightningModule):
             if 'lstm' in self.recurrence_type \
                 or 'gru' in self.recurrence_type:
                 x, hiddens = recurrent_layer(x)
+                # x = hiddens[0][-1].unsqueeze(0)
             else:
                 x = recurrent_layer(x)
 

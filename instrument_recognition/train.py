@@ -45,7 +45,7 @@ def run_task(hparams):
                                     log_dir=ir.LOG_DIR, test=hparams.test)
 
     # save model to torchscript
-    # utils.train.save_torchscript_model(task.model, os.path.join(save_dir, 'torchscript_model.pt'))
+    utils.train.save_torchscript_model(task.model, os.path.join(save_dir, 'torchscript_model.pt'))
 
 if __name__ == "__main__":
     import argparse

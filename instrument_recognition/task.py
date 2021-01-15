@@ -21,7 +21,6 @@ import uncertainty_metrics.numpy as um
 
 import tensorflow as tf
 import tensorboard as tb
-tf.io.gfile = tb.compat.tensorflow_stub.io.gfile
 
 import instrument_recognition as ir
 import instrument_recognition.models as models
@@ -53,7 +52,7 @@ class InstrumentDetectionTask(pl.LightningModule):
                  loss_fn: str = 'wce', 
                  seq_pooling_fn: str = 'none',
                  mixup: bool = False, mixup_alpha: float = 0.2,
-                 log_epoch_metrics: bool = True):
+                 log_epoch_metrics: bool = True, **kwargs):
         super().__init__()
         self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', 'log_epoch_metrics')
         self.max_epochs = max_epochs
@@ -78,7 +77,7 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     @classmethod
     def from_hparams(cls, model, datamodule, hparams):
-        obj = cls(model, datamodule, vars(hparams))
+        obj = cls(model, datamodule, **vars(hparams))
         obj.hparams = hparams
         return obj
 
@@ -108,9 +107,12 @@ class InstrumentDetectionTask(pl.LightningModule):
     def on_train_start(self):
         # log a forward pass
         from torchsummaryX import summary
+        from copy import deepcopy
         # get a param count for all models
         sample_input = torch.randn(self.model.input_shape)
-        self.logger.add_text('model summary', summary(self.model, sample_input))
+        model = deepcopy(self.model)
+        model = model.cpu()
+        self.logger.experiment.add_text('model summary', str(summary(model, sample_input)))
 
     def batch_detach(self, batch):
         """ detach any tensor in a list and move it to cpu
