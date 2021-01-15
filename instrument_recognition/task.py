@@ -2,28 +2,20 @@
 the instrument detection task!
 most of the experiment code is here. 
 """
-import argparse
 import os
-from collections import OrderedDict
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchaudio
-import torchvision
 import pytorch_lightning as pl
 from sklearn.metrics import accuracy_score, precision_score, \
                         recall_score, fbeta_score, classification_report
 import sklearn
-import matplotlib.pyplot as plt
 import uncertainty_metrics.numpy as um
 
-import tensorflow as tf
-import tensorboard as tb
-
 import instrument_recognition as ir
-import instrument_recognition.models as models
 import instrument_recognition.utils as utils
 
 def split(a, n):
@@ -54,7 +46,7 @@ class InstrumentDetectionTask(pl.LightningModule):
                  mixup: bool = False, mixup_alpha: float = 0.2,
                  log_epoch_metrics: bool = True, **kwargs):
         super().__init__()
-        self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', 'log_epoch_metrics')
+        self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', 'log_epoch_metrics', *list(kwargs.keys()))
         self.max_epochs = max_epochs
         self.loss_fn = loss_fn
         self.seq_pooling_fn = None if  seq_pooling_fn.lower() == 'none' else seq_pooling_fn
@@ -112,7 +104,9 @@ class InstrumentDetectionTask(pl.LightningModule):
         sample_input = torch.randn(self.model.input_shape)
         model = deepcopy(self.model)
         model = model.cpu()
-        self.logger.experiment.add_text('model summary', str(summary(model, sample_input)))
+
+        summary(model, sample_input).to_csv(
+            ir.LOG_DIR/self.hparams.parent_name/self.hparams.name/f'version_{self.hparams.version}'/'model_summary.csv')
 
     def batch_detach(self, batch):
         """ detach any tensor in a list and move it to cpu
@@ -438,6 +432,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         return self.batch_detach(outputs)
 
 def train_instrument_detection_model(task, 
+                                    parent_name: str,
                                     name: str,
                                     version: int,
                                     gpuid: int,
@@ -451,11 +446,10 @@ def train_instrument_detection_model(task,
     # seed everything!!!
     pl.seed_everything(random_seed)
 
-
     # set up logger
     from pytorch_lightning.loggers import TestTubeLogger
     logger = TestTubeLogger(
-        save_dir=log_dir,
+        save_dir=Path(log_dir)/parent_name,
         name=name, 
         version=version, 
         create_git_tag=True)
@@ -464,7 +458,7 @@ def train_instrument_detection_model(task,
         version = logger.version
 
     # set up logging and checkpoint dirs
-    log_dir = os.path.join(log_dir, name, f'version_{version}')
+    log_dir = os.path.join(log_dir, parent_name, name, f'version_{version}')
     os.makedirs(log_dir, exist_ok=True)
     task.log_dir = log_dir
     checkpoint_dir = os.path.join(log_dir, 'checkpoints')

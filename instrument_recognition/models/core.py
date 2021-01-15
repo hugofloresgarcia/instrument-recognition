@@ -85,7 +85,7 @@ class Model(pl.LightningModule):
             )
         
         # add intermediate embeddings
-        self.intermediate_embedding = Embedding(d_embedding=d_intermediate, depth=3)
+        self.intermediate_embedding = Embedding(d_embedding=d_intermediate, depth=10)
 
         # add recurrent layers
         if self.has_recurrent_layer:
@@ -130,7 +130,6 @@ class Model(pl.LightningModule):
         # output: expand sequence and batch dims
         x = x.view(seq_dim, batch_dim, -1)
         return x
-
 
     def forward(self, x):
         # input should be (sequence, batch, embedding)

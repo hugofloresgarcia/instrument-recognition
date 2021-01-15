@@ -40,7 +40,7 @@ def run_task(hparams):
 
     # run train fn and get back test results
     print(f'running task')
-    task, result = train_instrument_detection_model(task, name=hparams.name, version=hparams.version,
+    task, result = train_instrument_detection_model(task, parent_name=hparams.parent_name,  name=hparams.name, version=hparams.version,
                                     gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
                                     log_dir=ir.LOG_DIR, test=hparams.test)
 
