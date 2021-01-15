@@ -16,8 +16,7 @@ from instrument_recognition import utils
 ALL_MODEL_NAMES = ('openl3-mel128-6144-music', 'openl3-mel256-6144-music',
                   'openl3-mel128-512-music', 'openl3-mel256-512-music',
                   'openl3-mel128-6144-env', 'openl3-mel256-6144-env',
-                  'openl3-mel128-512-env', 'openl3-mel256-512-env', 
-                  'vggish')
+                  'openl3-mel128-512-env', 'openl3-mel256-512-env')
 
 def load_model_from_str(name: str):
     name = name.split('-')[0]
@@ -90,7 +89,6 @@ def _preprocess_vggish(model, name:str, model_name: str, num_workers: int, devic
             # save embeddings to cache
             os.makedirs(path_to_cached_file.parent, exist_ok=True)
             np.save(str(path_to_cached_file), embedding)
-
 
 def preprocess_dataset(name: str, model_name: str, batch_size: int, num_workers: int, device: int = None):
     model = load_model_from_str(model_name)

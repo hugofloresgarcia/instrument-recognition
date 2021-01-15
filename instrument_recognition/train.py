@@ -26,7 +26,7 @@ def run_task(hparams):
     hparams.output_dim = len(dm.classlist())
 
     # define a save dir
-    save_dir = ir.LOG_DIR / hparams.name / f'version_{hparams.version}'
+    save_dir = ir.LOG_DIR / hparams.parent_name / hparams.name / f'version_{hparams.version}'
     os.makedirs(save_dir, exist_ok=True)
     dump_classlist(dm, save_dir)
 
@@ -52,17 +52,26 @@ if __name__ == "__main__":
     from instrument_recognition.utils import str2bool
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--name', type=str, required=True,
-        help='experiment name')
-    parser.add_argument('--version', type=int, required=True)
+    parser.add_argument('--parent_name', type=str, required=True,
+        help='name of parent dir where experiment will be stored')
 
-    parser.add_argument('--gpuid', type=utils.parser_types.noneint, default=0)
-    parser.add_argument('--max_epochs', type=int, default=100)
+    parser.add_argument('--name', type=str, required=True,
+        help='experiment name.')
+
+    parser.add_argument('--version', type=int, required=True, 
+        help='experiment version')
+
+    parser.add_argument('--gpuid', type=utils.parser_types.noneint, default=0, 
+        help='gpu device number')
+
+    parser.add_argument('--max_epochs', type=int, default=100, 
+        help='maximum number of epochs to train for')
+
     parser.add_argument('--test', type=utils.parser_types.str2bool, default=False)
 
-    parser = Model.add_argparse_args(parser)
+    parser = Model.add_model_specific_args(parser)
     parser = DataModule.add_argparse_args(parser)
-    parser = InstrumentDetectionTask.add_argparse_args(parser)
+    parser = InstrumentDetectionTask.add_model_specific_args(parser)
 
     hparams = parser.parse_args()
 

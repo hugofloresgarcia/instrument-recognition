@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from instrument_recognition.models.transformer import TransformerEncoder
 
 BATCH_FIRST = False
+SEQUENCE_LENGTH = 10
 
 recurrent_model_sizes = {
     'lstm': {
@@ -48,7 +49,7 @@ class Embedding(nn.Module):
                 nn.Linear(d_embedding, d_embedding), 
                 nn.ReLU(),
              ) for d in range(depth)])
-    
+             
     def forward(self, x):
         for layer in self.layers:
             x = x + layer(x)
@@ -58,10 +59,9 @@ class Embedding(nn.Module):
 class Model(pl.LightningModule):
 
     def __init__(self, model_size: str, output_dim: int, 
-                recurrence_type: str = 'bilstm', dropout: float = 0.3):
+               recurrence_type: str = 'bilstm', dropout: float = 0.3):
         super().__init__()
         self.save_hyperparameters()
-
         self.output_dim = output_dim
         self.model_size = model_size
         self.recurrence_type = recurrence_type
@@ -73,6 +73,8 @@ class Model(pl.LightningModule):
 
         d_input = model_sizes[model_size]['d_input']
         d_intermediate = model_sizes[model_size]['d_intermediate']
+
+        self.input_shape = (1, SEQUENCE_LENGTH, d_input)
 
         # add the proper linear transformation depending on model size
         if self.has_linear_proj:
@@ -107,7 +109,7 @@ class Model(pl.LightningModule):
         return obj
 
     @classmethod
-    def add_argparse_args(cls, parent_parser):
+    def add_model_specific_args(cls, parent_parser):
         parser = parent_parser
         parser.add_argument('--model_size', type=str, required=True, 
             help=f'model size. one of {model_sizes.keys()}')
@@ -187,6 +189,6 @@ if __name__ == '__main__':
     # get a param count for all models
     for size, recurrence_type in product(model_sizes.keys(), recurrent_model_sizes.keys()):
         model = Model(model_size=size, output_dim=19, recurrence_type=recurrence_type)
-        sample_input = torch.zeros((1, 10, model_sizes[size]['d_input']))
+        sample_input = torch.zeros((1, SEQUENCE_LENGTH, model_sizes[size]['d_input']))
         print(summary(model, sample_input))
 

@@ -78,31 +78,43 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     @classmethod
     def from_hparams(cls, model, datamodule, hparams):
-        obj = cls(model, datamodule,
-                    learning_rate=hparams.learning_rate, 
-                    loss_fn=hparams.loss_fn, 
-                    seq_pooling_fn=hparams.seq_pooling_fn,
-                    mixup=hparams.mixup,
-                    mixup_alpha=hparams.mixup_alpha, 
-                    log_epoch_metrics=hparams.log_epoch_metrics)
+        obj = cls(model, datamodule, vars(hparams))
         obj.hparams = hparams
         return obj
-    
+
     @classmethod
-    def add_argparse_args(cls, parent_parser):
+    def add_model_specific_args(cls, parent_parser):
         parser = parent_parser
-        parser.add_argument('--learning_rate', type=float, default=0.0003)
-        parser.add_argument('--loss_fn', type=str, default='wce')
+
+        parser.add_argument('--learning_rate', type=float, default=0.0003, 
+            help='learning rate for training. will be decayed using MultiStepLR')
+
+        parser.add_argument('--loss_fn', type=str, default='wce', 
+            help='name of loss function to use: could be wce (weighted cross entropy) or ce (standard cross entropy)')
+
         parser.add_argument('--seq_pooling_fn', type=str, default='none', 
             help='if doing multiple instance_learning, '\
                     'this will pool sequence level predictions to a single instance prediction. '\
                     'if none, no pooling is done.')
-        parser.add_argument('--mixup', type=ir.utils.str2bool, default=False)
-        parser.add_argument('--mixup_alpha', type=float, default=0.2)
-        parser.add_argument('--log_epoch_metrics', type=ir.utils.str2bool, default=True)
+
+        parser.add_argument('--mixup', type=ir.utils.str2bool, default=False, 
+            help='whether to use mixup training or not')
+
+        parser.add_argument('--mixup_alpha', type=float, default=0.2, 
+            help='alpha value for mixup')
+
         return parser
 
+    def on_train_start(self):
+        # log a forward pass
+        from torchsummaryX import summary
+        # get a param count for all models
+        sample_input = torch.randn(self.model.input_shape)
+        self.logger.add_text('model summary', summary(self.model, sample_input))
+
     def batch_detach(self, batch):
+        """ detach any tensor in a list and move it to cpu
+        """
         for i, item in enumerate(batch):
             if isinstance( item, torch.Tensor):
                 batch[i] = item.detach().cpu()
@@ -248,17 +260,14 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     # EPOCH ENDS
     def train_epoch_end(self, outputs):
-        if self.log_epoch_metrics:
-            outputs = self._log_epoch_metrics(outputs, prefix='train')
+        outputs = self._log_epoch_metrics(outputs, prefix='train')
         return outputs
 
     def validation_epoch_end(self, outputs):
-        if self.log_epoch_metrics:
-            outputs = self._log_epoch_metrics(outputs, prefix='val')
+        outputs = self._log_epoch_metrics(outputs, prefix='val')
 
     def test_epoch_end(self, outputs):
-        if self.log_epoch_metrics:
-            outputs = self._log_epoch_metrics(outputs, prefix='test')
+        outputs = self._log_epoch_metrics(outputs, prefix='test')
 
     #------------------------------
     #---------- LOGGING -----------
