@@ -7,13 +7,11 @@ import pytorch_lightning as pl
 import torch
 
 
-def save_torchscript_model(model, save_path):
+def save_torchscript_model(model, save_path, example_input):
     """
-    saves a pl.LightningModule to torchscript via trace
+    saves a module to torchscript via trace
     """
-    audio = torch.randn((10, 1, 48000))
-
-    traced_module = torch.jit.trace(model, audio)
+    traced_module = torch.jit.trace(model, example_input)
     sm = torch.jit.script(traced_module)
     torch.jit.save(sm, save_path)
 
