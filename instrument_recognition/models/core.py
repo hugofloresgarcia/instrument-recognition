@@ -83,9 +83,6 @@ class Model(pl.LightningModule):
                 nn.Linear(d_input, d_intermediate), 
                 nn.ReLU()
             )
-        
-        # add intermediate embeddings
-        self.intermediate_embedding = Embedding(d_embedding=d_intermediate, depth=10)
 
         # add recurrent layers
         if self.has_recurrent_layer:
@@ -138,9 +135,6 @@ class Model(pl.LightningModule):
 
         if self.has_linear_proj:
             x = self._linear(x, self.fc_proj)
-
-        # pass through intermediate embedding
-        x = self._linear(x, self.intermediate_embedding)
         
         if self.has_recurrent_layer:
             recurrent_layer = self.__getattr__(self.recurrence_type)
