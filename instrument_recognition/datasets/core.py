@@ -73,7 +73,7 @@ class Dataset(torch.utils.data.Dataset):
             self.filter_unwanted_classes(unwanted_classes)
 
         # get only a class subset if that is desired
-        if 'mdb' in name or 'medleydb' in name:
+        if 'mdb-synthetic' in name:
             class_subset = ['male singer', 'female singer', 'violin', 'clean electric guitar', 
                             'distorted electric guitar', 'piano', 'clarinet', 'trumpet']
         if class_subset is not None:

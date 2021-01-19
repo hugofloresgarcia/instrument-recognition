@@ -38,8 +38,6 @@ def mdbsolo2records(output_name: 'mdb-solos'):
             shutil.copy(src_path_to_audio, dest_path_to_audio)
 
             path_to_audio = dest_path_to_audio
-    
-
 
             duration = librosa.core.get_duration(filename=str(path_to_audio))
 
