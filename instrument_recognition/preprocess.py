@@ -29,9 +29,8 @@ def load_model_from_str(name: str):
         model = torch.hub.load('harritaylor/torchvggish', 'vggish')
         model.eval()
     
-    if name == 'cqt2dft':
-        #FIXME: only doing this not to break the main function
-        model = torch.hub.load('harritaylor/torchvggish', 'vggish')
+    if name[0] == 'cqt2dft':
+        pass
 
     else:
         raise ValueError
@@ -143,7 +142,7 @@ def _preprocess_cqt2dft(name: str, num_workers: int):
 
 def preprocess_dataset(name: str, model_name: str, batch_size: int, num_workers: int, device: int = None):
     model = load_model_from_str(model_name)
-    if device is not None:
+    if device is not None and model is not None:
         model = model.to(device)
     if 'openl3' in model_name:
         _preprocess_openl3(model, name=name, model_name=model_name, batch_size=batch_size, num_workers=num_workers, device=device)
