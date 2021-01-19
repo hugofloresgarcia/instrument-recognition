@@ -72,14 +72,14 @@ class Model(pl.LightningModule):
         assert self.output_dim > 0
         assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
 
-        if model_size == 'cqt2dft':
-            from instrument_recognition.models.embed import CQT2DFTEmbedding
-            self.conv = CQT2DFTEmbedding()
-
         d_input = model_sizes[model_size]['d_input']
         d_intermediate = model_sizes[model_size]['d_intermediate']
 
         self.input_shape = (1, SEQUENCE_LENGTH, d_input)
+
+        if model_size == 'cqt2dft':
+            from instrument_recognition.models.embed import CQT2DFTEmbedding
+            self.conv = CQT2DFTEmbedding()
 
         if model_size == 'cqt2dft':
             self.input_shape = (1, SEQUENCE_LENGTH, 240, 76)
