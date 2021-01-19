@@ -28,6 +28,7 @@ recurrent_model_sizes = {
 }
 
 model_sizes = {
+    'cqt2dft': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
     'vggish': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
     'tiny':  dict(d_input=512,  d_intermediate=128, has_linear_proj=True),
     'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=False),
@@ -71,10 +72,17 @@ class Model(pl.LightningModule):
         assert self.output_dim > 0
         assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
 
+        if model_size == 'cqt2dft':
+            from instrument_recognition.models.embed import CQT2DFTEmbedding
+            self.conv = CQT2DFTEmbedding()
+
         d_input = model_sizes[model_size]['d_input']
         d_intermediate = model_sizes[model_size]['d_intermediate']
 
         self.input_shape = (1, SEQUENCE_LENGTH, d_input)
+
+        if model_size == 'cqt2dft':
+            self.input_shape = (1, SEQUENCE_LENGTH, 240, 76)
 
         # add the proper linear transformation depending on model size
         if self.has_linear_proj:
@@ -127,8 +135,23 @@ class Model(pl.LightningModule):
         # output: expand sequence and batch dims
         x = x.view(seq_dim, batch_dim, -1)
         return x
+    
+    def _conv_embed(self, x, layer):
+        assert not BATCH_FIRST
+        seq_dim, batch_dim, h_dim, w_dim = x.shape
+        x = x.contiguous()
+        x = x.view(-1, 1, h_dim, w_dim)
+
+        x = layer(x)
+
+        # output: expand sequence and batch dims
+        x = x.view(seq_dim, batch_dim, -1)
+        return x
 
     def forward(self, x):
+        if hasattr(self, 'conv'):
+            x = self._conv_embed(x, self.conv)
+
         # input should be (sequence, batch, embedding)
         assert x.ndim == 3
         assert x.shape[-1] == model_sizes[self.model_size]['d_input']
