@@ -49,7 +49,8 @@ def _preprocess_openl3(model, name: str, model_name: str,  batch_size: int, num_
 
             # get embedding
             # NOTE: sequence length here left to the devices of the audio file
-            X = X.view(batch_size, -1, 1, INPUT_DIM)
+            local_batch_size = X.shape[0]
+            X = X.view(local_batch_size, -1, 1, INPUT_DIM)
             X = X.permute(1, 0, 2, 3)
             X_embedded = []
             for X_step in X:
