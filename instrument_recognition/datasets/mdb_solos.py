@@ -31,7 +31,15 @@ def mdbsolo2records(output_name: 'mdb-solos'):
 
             audio_filename = f'Medley-solos-DB_{partition_alias}-{label_id}_{uuid}.wav'
             record_filename = Path(audio_filename).with_suffix('.json')
-            path_to_audio = source_dir / audio_filename
+
+            # copy audio to dest dir
+            src_path_to_audio = source_dir / audio_filename
+            dest_path_to_audio = dest_dir / partition / audio_filename
+            shutil.copy(src_path_to_audio, dest_path_to_audio)
+
+            path_to_audio = dest_path_to_audio
+    
+
 
             duration = librosa.core.get_duration(filename=str(path_to_audio))
 
@@ -41,8 +49,7 @@ def mdbsolo2records(output_name: 'mdb-solos'):
             for label in labels:
                 events.append(dict(label=label, start_time=0.0, end_time=duration, duration=duration))
 
-            os.makedirs(path_to_audio.parent, exist_ok=True)
-
+            
             # create an output record
             new_record = {}
             new_record['events'] = events
