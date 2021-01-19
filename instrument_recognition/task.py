@@ -178,6 +178,9 @@ class InstrumentDetectionTask(pl.LightningModule):
 
         return batch
 
+#TODO: need to add a method that logs a FULL sample
+# of a training step in order to debug and see if anything is wrong.
+
     def _main_step(self, batch, batch_idx, train=False):
         if not (self.mixup and train):
             batch = self.preprocess(batch, train=train)
@@ -186,10 +189,21 @@ class InstrumentDetectionTask(pl.LightningModule):
             yhat = self.model(X)
             loss = self.criterion(yhat, y)
         else:
-            raise NotImplementedError
+            if not self.multiclass: raise NotImplementedError
             batch = self.preprocess(batch, train=train)
+            if not ir.models.BATCH_FIRST:
+                if batch['X'].ndim > 3: raise NotImplementedError()
+                batch['X'] = batch['X'].permute(1, 0, 2)
+                batch['y'] = batch['y'].permute(1, 0, 2)
+
             X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.mixup_alpha)
             # forward pass through model
+            if not ir.models.BATCH_FIRST:
+                if batch['X'].ndim > 3: raise NotImplementedError()
+                X = X.permute(1, 0, 2)
+                y_a = y_a.permute(1, 0, 2)
+                y_b = y_b.permute(1, 0, 2)
+
             yhat = self.model(X)
             loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
             y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
@@ -479,7 +493,7 @@ def train_instrument_detection_model(task,
     else:
         callbacks = []
 
-    lr_logger = pl.callbacks.lr_logger.LearningRateLogger(logging_interval='step')
+    lr_logger = pl.callbacks.LearningRateMonitor(logging_interval='step')
 
     callbacks.append(lr_logger)
 
