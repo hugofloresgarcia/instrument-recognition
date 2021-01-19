@@ -170,7 +170,7 @@ def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers:
         output_dim = d_hidden * num_directions
     
     elif 'transformer' in layer_name:
-        layer = TransformerEncoder(d_model=d_in, num_heads=num_heads, d_hidden=d_hidden, 
+        layer = TransformerEncoder(d_model=d_in, num_heads=num_heads, d_hidden=d_hidden*4, 
                                    num_layers=num_layers, dropout=dropout)
         output_dim = d_in
     
