@@ -64,8 +64,9 @@ class Dataset(torch.utils.data.Dataset):
 
         # use regular unwanted classes? 
         if unwanted_classes is None:
-            from instrument_recognition.partition import unwanted_classes as uc
-            unwanted_classes = uc
+            pass
+            # from instrument_recognition.partition import unwanted_classes as uc
+            # unwanted_classes = uc
 
         # filter out unwanted classes
         if unwanted_classes is not None:
@@ -126,9 +127,15 @@ class Dataset(torch.utils.data.Dataset):
         if self.embedding_name is None:
             audio = au.io.load_audio_file(entry['path_to_audio'], self.sr)
 
+            required_audio_len = int(entry['duration'] * self.sr)
+
             # truncate any extra samples from scaper
-            if not audio.shape[-1] == entry['duration'] * self.sr:
-                audio = audio[:, 0:int(entry['duration'] * self.sr)]
+            if audio.shape[-1] > required_audio_len:
+                audio = audio[:, 0:required_audio_len]
+            
+            # zero pad to meet required length if need be
+            if audio.shape[-1] < required_audio_len:
+                audio = au.zero_pad(audio, required_len=required_audio_len)
 
             # NOTE: this reshapes the audio into 1 second chunks
             audio = audio.reshape(int(entry['duration']), 1, self.sr)

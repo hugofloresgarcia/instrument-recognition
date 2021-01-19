@@ -9,6 +9,8 @@ import librosa
 import instrument_recognition as ir
 import audio_utils as au
 
+DURATION = 3.0
+
 def mdbsolo2records(output_name: 'mdb-solos'):
     source_dir = ir.DATA_DIR / 'mdb-solos-source'
     dest_dir = ir.DATA_DIR / output_name
@@ -46,7 +48,7 @@ def mdbsolo2records(output_name: 'mdb-solos'):
             new_record['events'] = events
             new_record['path_to_audio'] = str(path_to_audio)
             new_record['path_to_record'] = str(dest_dir / partition / record_filename)
-            new_record['duration'] = librosa.core.get_duration(filename=str(path_to_audio))
+            new_record['duration'] = DURATION
 
             # save output record
             ir.utils.data.save_metadata_entry(new_record, path=new_record['path_to_record'], format='json')

@@ -19,13 +19,13 @@ ALL_MODEL_NAMES = ('openl3-mel128-6144-music', 'openl3-mel256-6144-music',
                   'openl3-mel128-512-env', 'openl3-mel256-512-env')
 
 def load_model_from_str(name: str):
-    name = name.split('-')[0]
+    name = name.split('-')
 
-    if name == 'openl3':
-        _, input_repr, embedding_size, content_type = name.split('-')
+    if name[0] == 'openl3':
+        _, input_repr, embedding_size, content_type = name
         model = torchopenl3.OpenL3Embedding(input_repr=input_repr, embedding_size=int(embedding_size), 
                                         content_type=content_type, pretrained=True)
-    if name == 'vggish':
+    elif name[0] == 'vggish':
         model = torch.hub.load('harritaylor/torchvggish', 'vggish')
         model.eval()
     else:
@@ -34,6 +34,7 @@ def load_model_from_str(name: str):
     return model
 
 def _preprocess_openl3(model, name: str, model_name: str,  batch_size: int, num_workers: int, device: int = None):
+    INPUT_DIM = 48000
     dm = ir.datasets.DataModule(name, batch_size, num_workers)
     dm.setup()
 
@@ -47,8 +48,8 @@ def _preprocess_openl3(model, name: str, model_name: str,  batch_size: int, num_
             X = batch['X']
 
             # get embedding
-            #NOTE: BAD IDEA to hardcode this 10
-            X = X.view(batch_size, 10, 1, X.shape[-1])
+            # NOTE: sequence length here left to the devices of the audio file
+            X = X.view(batch_size, -1, 1, INPUT_DIM)
             X = X.permute(1, 0, 2, 3)
             X_embedded = []
             for X_step in X:
