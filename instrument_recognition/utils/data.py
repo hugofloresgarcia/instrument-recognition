@@ -42,7 +42,7 @@ def get_one_hot_matrix(record, classlist: list, resolution: float = 1.0):
 
     # make an empty matrix shape (time, classes)
     one_hot = np.zeros((num_time_bins, len(classlist)))
-    time_axis = list(np.arange(0.0, duration, resolution))
+    time_axis = list(np.arange(0.0, duration+resolution, resolution))
 
     # get the indices for each label
     for event in events:
