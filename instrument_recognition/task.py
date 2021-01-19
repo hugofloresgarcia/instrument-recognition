@@ -479,6 +479,10 @@ def train_instrument_detection_model(task,
     else:
         callbacks = []
 
+    lr_logger = pl.callbacks.lr_logger.LearningRateLogger(logging_interval='step')
+
+    callbacks.append(lr_logger)
+
     if gpuid is not None:
         if gpuid == -1:
             gpus = -1
