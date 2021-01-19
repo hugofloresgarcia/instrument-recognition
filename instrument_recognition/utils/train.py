@@ -11,7 +11,11 @@ def save_torchscript_model(model, save_path, example_input):
     """
     saves a module to torchscript via trace
     """
+    # move to cpu if we need to
+    model = model.cpu()
+    example_input = example_input.cpu()
     traced_module = torch.jit.trace(model, example_input)
+    
     sm = torch.jit.script(traced_module)
     torch.jit.save(sm, save_path)
 
