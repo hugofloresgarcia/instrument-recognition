@@ -7,7 +7,7 @@ import pytorch_lightning as pl
 from instrument_recognition.models.transformer import TransformerEncoder
 
 BATCH_FIRST = False
-SEQUENCE_LENGTH = 10
+DEFAULT_SEQ_LEN = 10
 
 recurrent_model_sizes = {
     'lstm': {
@@ -72,17 +72,15 @@ class Model(pl.LightningModule):
         assert self.output_dim > 0
         assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
 
-        if model_size == 'cqt2dft':
-            from instrument_recognition.models.embed import CQT2DFTEmbedding
-            self.conv = CQT2DFTEmbedding()
-
         d_input = model_sizes[model_size]['d_input']
         d_intermediate = model_sizes[model_size]['d_intermediate']
 
-        self.input_shape = (1, SEQUENCE_LENGTH, d_input)
+        self.input_shape = (1, DEFAULT_SEQ_LEN, d_input)
 
         if model_size == 'cqt2dft':
-            self.input_shape = (1, SEQUENCE_LENGTH, 240, 76)
+            from instrument_recognition.models.embed import CQT2DFTEmbedding
+            self.conv = CQT2DFTEmbedding()
+            self.input_shape = (1, DEFAULT_SEQ_LEN, 240, 76)
 
         # add the proper linear transformation depending on model size
         if self.has_linear_proj:
@@ -104,7 +102,9 @@ class Model(pl.LightningModule):
             r_dim = d_intermediate
 
         # add the fully connected classifier :)
-        self.fc_output = nn.Sequential(nn.BatchNorm1d(r_dim), nn.Linear(r_dim, output_dim))
+        self.fc_output = nn.Sequential(
+                    nn.BatchNorm1d(r_dim), 
+                    nn.Linear(r_dim, output_dim))
     
     @classmethod
     def from_hparams(cls, hparams):
@@ -204,7 +204,7 @@ if __name__ == '__main__':
     from torchsummaryX import summary
     # get a param count for all models
     for size, recurrence_type in product(model_sizes.keys(), recurrent_model_sizes.keys()):
-        model = Model(model_size=size, output_dim=19, recurrence_type=recurrence_type)
-        sample_input = torch.zeros((1, SEQUENCE_LENGTH, model_sizes[size]['d_input']))
+        model = Model(model_size=size, output_dim=20, recurrence_type=recurrence_type)
+        sample_input = torch.zeros(model.input_shape)
         print(summary(model, sample_input))
 

@@ -11,6 +11,7 @@ def augment_and_save_record(entry: dict, source_dir: str, dest_dir: str):
 
     # make a new entry
     output_entry = dict(entry)
+
     # create output paths 
     output_entry['path_to_record'] = str(dest_dir /  Path(entry['path_to_record']).relative_to(source_dir))
     output_entry['path_to_audio'] = str(dest_dir / Path(entry['path_to_audio']).relative_to(source_dir))
@@ -25,16 +26,17 @@ def augment_and_save_record(entry: dict, source_dir: str, dest_dir: str):
     ir.utils.data.save_metadata_entry(effect_params, output_entry['path_to_effect_params'], format='yaml')
     ir.utils.data.save_metadata_entry(output_entry, output_entry['path_to_record'], format='json')
 
-def augment_dataset(name: str, partition: str):
-    source_dir = ir.DATA_DIR / name / partition
-    dest_dir = ir.DATA_DIR / name / f'{partition}-augmented'
+def augment_dataset(name: str, partition: str, num_folds: int):
+    for fold in range(num_folds):
+        source_dir = ir.DATA_DIR / name / partition
+        dest_dir = ir.DATA_DIR / name / f'{partition}-augmented' / f'fold-{fold}'
 
-    # get all dem metadata entries
-    records = ir.utils.data.glob_all_metadata_entries(source_dir)
-    source_dirs = [source_dir for r in range(len(records))]
-    dest_dirs = [dest_dir for r in range(len(records))]
+        # get all dem metadata entries
+        records = ir.utils.data.glob_all_metadata_entries(source_dir)
+        source_dirs = [source_dir for r in range(len(records))]
+        dest_dirs = [dest_dir for r in range(len(records))]
 
-    tqdm.contrib.concurrent.process_map(augment_and_save_record, records, source_dirs, dest_dirs)
+        tqdm.contrib.concurrent.process_map(augment_and_save_record, records, source_dirs, dest_dirs)
         
 if __name__ == "__main__":
     import argparse
@@ -43,7 +45,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--partition', type=str, default='train')
+    parser.add_argument('--num_folds', type=int, default=2)
 
     args = parser.parse_args()
 
-    augment_dataset(args.name, args.partition)
+    augment_dataset(args.name, args.partition, args.num_folds)

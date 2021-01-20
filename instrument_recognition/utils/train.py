@@ -6,6 +6,31 @@ import torch.nn as nn
 import pytorch_lightning as pl
 import torch
 
+import instrument_recognition as ir
+
+def load_best_model_from_test_tube(test_tube_dir):
+    """because the model is wrapped in a Task object, 
+    getting the best model is not trivial. Given a test tube dir
+    (along with name and version), this function will load a Model
+    with its state dict. 
+    """
+    ckpt = ir.utils.train.get_best_ckpt_path(test_tube_dir / 'checkpoints')
+
+    ckpt = torch.load(ckpt)
+
+    def strip_state_dict_keys(state_dict, pattern='model.'):
+        from collections import OrderedDict
+        # remove the pattern from the state dict keys
+        output = OrderedDict()
+        for k in state_dict:
+            if pattern in k:
+                new_k = k.replace(pattern, '')
+                output[new_k] = ckpt['state_dict'][k]
+        return output
+
+    model = ir.models.Model(**ckpt['hyper_parameters'])
+    model.load_state_dict(strip_state_dict_keys(ckpt['state_dict'], 'model.'))
+    return model
 
 def save_torchscript_model(model, save_path, example_input):
     """
@@ -62,26 +87,18 @@ def get_best_ckpt_path(checkpoint_dir):
     print(f'found checkpoint: {ckpt_path}')
     return ckpt_path
 
-def _test_torchscript_model(path_to_model):
-    model = torch.jit.load(path_to_model)
-
-    audio = np.randn((3, 1, 48000))
-
-    print(model(audio))
-
-def mixup_data(x, y, alpha=1.0):
+def mixup_data(x, y, alpha=1.0, dim=0):
     '''Returns mixed inputs, pairs of targets, and lambda'''
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
     else:
         lam = 1
 
-    batch_size = x.size()[0]
+    batch_size = x.size()[dim]
+    index = torch.randperm(batch_size).type_as(x).long()
 
-    index = torch.randperm(batch_size)
-
-    mixed_x = lam * x + (1 - lam) * x[index, :]
-    y_a, y_b = y, y[index]
+    mixed_x = lam * x + (1 - lam) * torch.index_select(x, dim=dim, index=index).type_as(x)
+    y_a, y_b = y, torch.index_select(y, dim=dim, index=index).type_as(y)
     return mixed_x, y_a, y_b, lam
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):

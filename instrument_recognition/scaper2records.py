@@ -10,7 +10,7 @@ import instrument_recognition as ir
 
 def create_records_for_scaper_dataset(name: str):
     dataset_root = ir.DATA_DIR / name 
-    partitions = [dataset_root / o for o in os.listdir(dataset_root) if os.path.isdir(dataset_root / o)]
+    partitions = ir.utils.data.list_subdir(dataset_root)
     print(f'found partitions {partitions}')
     
     for partition in partitions:

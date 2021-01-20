@@ -47,7 +47,7 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
     seed = ir.core.RANDOM_SEED
 
     # lets go
-    partitions = os.listdir(data_dir/dataset)
+    partitions = ir.utils.data.list_subdir(data_dir/dataset)
     for partition in partitions:
         fg_path = data_dir/dataset/partition/'foreground'
         bg_path = data_dir/dataset/partition/'background'

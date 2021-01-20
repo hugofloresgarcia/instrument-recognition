@@ -23,46 +23,27 @@ def split(a, n):
     k, m = divmod(len(a), n)
     return (a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
 
-def pool(x: torch.Tensor, dim: int = 0, clip=False):
-    # TODO: if alpha is a trainable parameter, this 
-    # could be turned into an nn.Module and become autopool
-    alpha = torch.ones(x.shape[-1]).type_as(x)
-    x = torch.sum(
-            x * torch.exp(alpha * x)
-                    /
-            torch.sum(torch.exp(alpha * x), dim=dim), dim=dim, keepdim=False)
-    if clip:
-        x[x != x] = 0
-        x = x.clip(min=0, max=1)
-    return x
-
 class InstrumentDetectionTask(pl.LightningModule):
 
     def __init__(self, model, datamodule, 
                  max_epochs: int = 100,
                  learning_rate: float = 0.0003,
                  loss_fn: str = 'wce', 
-                 seq_pooling_fn: str = 'none',
-                 mixup: bool = False, mixup_alpha: float = 0.2,
-                 log_epoch_metrics: bool = True, **kwargs):
+                 mixup: bool = False, mixup_alpha: float = 0.2, **kwargs):
         super().__init__()
-        self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', 'log_epoch_metrics', *list(kwargs.keys()))
+        self.save_hyperparameters('max_epochs', 'learning_rate', 'loss_fn', 'mixup', 'mixup_alpha', *list(kwargs.keys()))
         self.max_epochs = max_epochs
         self.loss_fn = loss_fn
-        self.seq_pooling_fn = None if  seq_pooling_fn.lower() == 'none' else seq_pooling_fn
-        self.multiclass = 'bce' not in loss_fn
         self.mixup = mixup
         self.mixup_alpha = mixup_alpha
         self.learning_rate = learning_rate
-        self.log_epoch_metrics = log_epoch_metrics
 
         # datamodules
         self.datamodule = datamodule
-        self.classlist = self.datamodule.dataset.classlist
+        self.classlist = self.datamodule.classlist
 
         assert hasattr(self.datamodule.dataset, 'class_weights'), 'dataset is missing self.class_weights'
-        self.class_weights = nn.Parameter(
-            torch.from_numpy(self.datamodule.dataset.class_weights).float())
+        self.class_weights = nn.Parameter(torch.from_numpy(self.datamodule.dataset.class_weights).float())
         self.class_weights.requires_grad = False
 
         self.model = model
@@ -83,11 +64,6 @@ class InstrumentDetectionTask(pl.LightningModule):
         parser.add_argument('--loss_fn', type=str, default='wce', 
             help='name of loss function to use: could be wce (weighted cross entropy) or ce (standard cross entropy)')
 
-        parser.add_argument('--seq_pooling_fn', type=str, default='none', 
-            help='if doing multiple instance_learning, '\
-                    'this will pool sequence level predictions to a single instance prediction. '\
-                    'if none, no pooling is done.')
-
         parser.add_argument('--mixup', type=ir.utils.str2bool, default=False, 
             help='whether to use mixup training or not')
 
@@ -105,8 +81,7 @@ class InstrumentDetectionTask(pl.LightningModule):
         model = deepcopy(self.model)
         model = model.cpu()
 
-        summary(model, sample_input).to_csv(
-            ir.LOG_DIR/self.hparams.parent_name/self.hparams.name/f'version_{self.hparams.version}'/'model_summary.csv')
+        summary(model, sample_input).to_csv(Path(self.log_dir)/'model_summary.csv')
 
     def batch_detach(self, batch):
         """ detach any tensor in a list and move it to cpu
@@ -131,91 +106,72 @@ class InstrumentDetectionTask(pl.LightningModule):
     #-------------------------------
     #---------- TRAINING -----------
     #-------------------------------
-    #TODO: need to refactor all the if "seq_pooling_fn" and if "loss_fn" statements to their own methods
     def criterion(self, yhat, y):
-        # NOTE: loss functions explained. 
-        #  "ce" stands for cross entropy (for multiclass scenarios)
-        # "bce" stands for binary cross entropy (for multiclass, multilabel scenarios)
         # if the letter "w" is present, the loss function will be weighted
         weights = self.class_weights if 'w' in self.loss_fn else None
-        if 'ce' in self.loss_fn and not 'b' in self.loss_fn:
-            # take the argmax of the y matrix. 
-            # y and yhat matrix should be shape (batch, sequence, num_classes)
-            # we want y to be shape (batch * sequence) and yhat (batch, sequence, num_classes)
-            y = torch.argmax(y, dim=-1).view(-1)
+        if 'ce' in self.loss_fn:
+            # yhat matrix should be shape (batch, sequence, num_classes)
+            # we want y to be shape (batch * sequence) and yhat (batch * sequence, num_classes)
+            y = y.view(-1)
             yhat = yhat.view(-1, yhat.shape[-1])
-
-            if self.seq_pooling_fn is not None:
-                raise NotImplementedError('pooling not implemented for multiclass cross entropy')
-
             loss = F.cross_entropy(yhat, y, weight=weights)
-        elif 'bce' in self.loss_fn:
-            y = y.contiguous().float()
-            if self.seq_pooling_fn is not None:
-                # pool the sequence dim and get rid of it
-                y = pool(y, dim=0, clip=True)
-                yhat = pool(yhat, dim=0, clip=False)
-            else:
-                y = y.view(-1, y.shape[-1])
-                yhat = yhat.view(-1, yhat.shape[-1])
-            loss = F.binary_cross_entropy_with_logits(yhat, y, weight=weights)
         else:
             raise ValueError(f'incorrect loss_fn: {self.loss_fn}')
         
         return loss
 
+    def is_seq_batch(self, x):
+        return  x.shape[0] < x.shape[1]
+
+    def is_batch_seq(self, x):
+        return  x.shape[0] > x.shape[1]
+
+    def batch_seq_swap(self, x):
+        """ switch batch and sequence dims """
+        return x.permute(1, 0, *list(range(x.ndim))[2:])
+
     def preprocess(self, batch, train=False):
+        # append a copy if our batch size is 1
         if len(batch['X']) == 1:
             batch['X'] = torch.cat([batch['X'], batch['X']], dim=0)
             batch['y'] = torch.cat([batch['y'], batch['y']], dim=0)
 
-        # as of now, we are getting tensors shape (batch, sequence, feature)
-        # reshape to (sequence, batch, feature)
-        if not ir.models.BATCH_FIRST:
+        # change batch seq to seq batch
+        assert self.is_batch_seq(batch['X']) and self.is_batch_seq(batch['y'])
+        batch['X'] = self.batch_seq_swap(batch['X'])
+        batch['y'] = self.batch_seq_swap(batch['y'])
+        assert self.is_seq_batch(batch['X']) and self.is_seq_batch(batch['y'])
 
-            batch['X'] = batch['X'].permute(1, 0, *list(range(batch['X'].ndim))[2:])
-            batch['y'] = batch['y'].permute(1, 0, *list(range(batch['y'].ndim))[2:])
+        # take the argmax of y (because y should be onehot)
+        assert batch['y'].ndim == 3, f'y should be 3 dimensional one hot but got shape {batch["y"].shape}'
+        batch['y'] = torch.argmax(batch['y'], dim=-1, keepdim=False)
+        assert batch['y'].ndim == 2
 
         return batch
 
-#TODO: need to add a method that logs a FULL sample
-# of a training step in order to debug and see if anything is wrong.
-
     def _main_step(self, batch, batch_idx, train=False):
         if not (self.mixup and train):
+            # STANDARD FORWARD PASS
             batch = self.preprocess(batch, train=train)
             X, y = batch['X'], batch['y']
-            # forward pass through model
             yhat = self.model(X)
             loss = self.criterion(yhat, y)
         else:
-            if not self.multiclass: raise NotImplementedError
+            # MIXUP FORWARD PASS
             batch = self.preprocess(batch, train=train)
-            if not ir.models.BATCH_FIRST:
-                if batch['X'].ndim > 3: raise NotImplementedError()
-                batch['X'] = batch['X'].permute(1, 0, 2)
-                batch['y'] = batch['y'].permute(1, 0, 2)
-
-            X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.mixup_alpha)
+            assert self.is_seq_batch(batch['X'])
+            X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.mixup_alpha, dim=1)
             # forward pass through model
-            if not ir.models.BATCH_FIRST:
-                if batch['X'].ndim > 3: raise NotImplementedError()
-                X = X.permute(1, 0, 2)
-                y_a = y_a.permute(1, 0, 2)
-                y_b = y_b.permute(1, 0, 2)
-
             yhat = self.model(X)
             loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
             y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
         
         # squash down (sequence, batch, n) to (sequence * batch, n) if multiclass
         yhat = yhat.view(-1, yhat.shape[-1])
-        y = y.contiguous()
-        y = y.view(-1, y.shape[-1])
+        y = y.view(-1)
 
-        probits = F.softmax(yhat, dim=1) if self.multiclass else F.sigmoid(yhat)
-        yhat = torch.argmax(probits, dim=1, keepdim=False) if self.multiclass else probits
-        y = torch.argmax(y, dim=1, keepdim=False) if self.multiclass else y
+        probits = F.softmax(yhat, dim=1)
+        yhat = torch.argmax(probits, dim=1, keepdim=False)
 
         return dict(loss=loss, y=y.detach(), probits=probits.detach(),
                     yhat=yhat.detach(), X=X.detach())
@@ -240,6 +196,7 @@ class InstrumentDetectionTask(pl.LightningModule):
     def validation_step(self, batch, batch_idx):  
         # get result of forward pass
         result = self._main_step(batch,batch_idx)
+
         # update the batch with the result 
         batch.update(result)
 
@@ -250,7 +207,25 @@ class InstrumentDetectionTask(pl.LightningModule):
         # metric logging
         self.log('loss/val', result['loss'].detach().cpu(), logger=True, prog_bar=True)
         self.log('loss_val', result['loss'].detach().cpu(), on_step=False, on_epoch=True, prog_bar=True)
-        self.log_sklearn_metrics(batch['yhat'].detach().cpu(), batch['y'].detach().cpu(), prefix='val')
+        self.log_multiclass_metrics(batch['yhat'].detach().cpu(), batch['y'].detach().cpu(), prefix='val')
+
+        return result
+
+    def test_step(self, batch, batch_idx):  
+        # get result of forward pass
+        result = self._main_step(batch,batch_idx)
+
+        # update the batch with the result 
+        batch.update(result)
+
+        # pick and log sample audio
+        if batch_idx % 100 == 0:
+            self.log_random_sample(batch, title='test-sample')
+
+        # metric logging
+        self.log('loss/test', result['loss'].detach().cpu(), logger=True, prog_bar=True)
+        self.log('loss_test', result['loss'].detach().cpu(), on_step=False, on_epoch=True, prog_bar=True)
+        self.log_multiclass_metrics(batch['yhat'].detach().cpu(), batch['y'].detach().cpu(), prefix='test')
 
         return result
 
@@ -284,33 +259,28 @@ class InstrumentDetectionTask(pl.LightningModule):
     #------------------------------
 
     def log_uncertainty_metrics(self, probits, y, prefix='val'):
-        if self.multiclass:
-            assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
-            # convert to numpy
-            probits = probits.detach().numpy()
-            y = y.detach().numpy().astype(np.int)
+        assert y.ndim == 1, f'y must NOT be one-hot encoded: {y}'
+        # convert to numpy
+        probits = probits.detach().numpy()
+        y = y.detach().numpy().astype(np.int)
 
-            # compute metrics
-            ece = um.ece(y, probits, num_bins=30)
-            self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
+        # compute metrics
+        ece = um.ece(y, probits, num_bins=30)
+        self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
-            if prefix == 'test':
-                print('computing reliability')
-                reliability_fig = um.reliability_diagram(probits, y)
+        if prefix == 'test':
+            print('computing reliability')
+            reliability_fig = um.reliability_diagram(probits, y)
+            self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
 
-                log_dir = self.log_dir
-                confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
-                confidences = np.array(confidences)
-                accuracies = np.array(accuracies)
-                xbins = np.array(xbins)
-                np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
-                np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
-                np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
-
-                self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
-            print('done :)')
-        else: 
-            raise NotImplementedError
+            # log_dir = self.log_dir
+            # confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
+            # confidences = np.array(confidences)
+            # accuracies = np.array(accuracies)
+            # xbins = np.array(xbins)
+            # np.save(os.path.join(log_dir, f'{prefix}-confidences.npy'), confidences)
+            # np.save(os.path.join(log_dir, f'{prefix}-accuracies.npy'), accuracies)
+            # np.save(os.path.join(log_dir, f'{prefix}-xbins.npy'), xbins)
 
     def log_multilabel_metrics(self, yhat, y, prefix='val'):
         assert y.ndim == 2 and yhat.ndim == 2
@@ -330,37 +300,16 @@ class InstrumentDetectionTask(pl.LightningModule):
         self.log(f'recall/{prefix}', recall_score(y, yhat,  average='weighted'), on_epoch=False)
         self.log(f'fscore/{prefix}', fbeta_score(y, yhat,  average='weighted', beta=1), on_epoch=False)
 
-    def log_sklearn_metrics(self, yhat, y, prefix='val'):
-        if self.multiclass:
-            self.log_multiclass_metrics(yhat, y, prefix)
-        else:
-            self.log_multilabel_metrics(yhat, y, prefix)
-
-    def log_embedding(self, embedding_batch, y, metadata, title):
-        assert embedding_batch.ndim == 2
-        assert y.ndim == 1
-        
-        self.logger.experiment.add_embedding(embedding_batch,tag=title,  
-                                            metadata=metadata, global_step=self.global_step)
-
     def log_random_sample(self, batch, title='sample'):
         #TODO: need to add an if multiclass thing here
-        if self.multiclass:
-            batch = self.batch_detach(batch)
-            idx = np.random.randint(0, len(batch['X']))
-            pred = self.classlist[batch['yhat'][idx]]
-            truth = self.classlist[batch['y'][idx]]
-            path_to_audio = batch['path_to_audio'][idx]
+        batch = self.batch_detach(batch)
+        idx = np.random.randint(0, len(batch['X']))
+        pred = self.classlist[batch['yhat'][idx]]
+        truth = self.classlist[batch['y'][idx]]
 
-            self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
-                f'pred: {pred}\n truth:{truth}', 
-                self.global_step)
-
-            self.logger.experiment.add_text(f'{title}-path_to_audio/{truth}', 
-                                            str(path_to_audio), 
-                                            self.global_step)
-        else:
-            pass
+        self.logger.experiment.add_text(f'{title}-pred-vs-truth', 
+            f'pred: {pred}\n truth:{truth}', 
+            self.global_step)
 
     def register_all_hooks(self):
         layer_names = self.model.log_layers
@@ -375,78 +324,78 @@ class InstrumentDetectionTask(pl.LightningModule):
         if not found_layer:
             raise Exception(f'couldnt find at least one of the layers: {layer_names}')
 
+    def _epoch_multiclass_report(self, y, yhat, probits, prefix):
+        # CONFUSION MATRIX
+        conf_matrix = sklearn.metrics.confusion_matrix(
+            y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
+            labels=list(range(len(self.classlist))), normalize=None)
+        conf_matrix = np.around(conf_matrix, 3)
+
+        # get plotly images as byte array
+        conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classlist))
+
+        # CONFUSION MATRIX (NORMALIZED)
+        norm_conf_matrix = sklearn.metrics.confusion_matrix(
+            y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
+            labels=list(range(len(self.classlist))), normalize='true')
+        norm_conf_matrix = np.around(norm_conf_matrix, 2)
+
+        # get plotly images as byte array
+        norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classlist))
+
+        # log metrics
+        self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
+        self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'))
+        self.log(f'recall/{prefix}', recall_score(y, yhat, average='weighted'))
+        self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+        self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+
+        self.log_uncertainty_metrics(probits, y, prefix)
+
+        self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
+        self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
+
+    def _epoch_per_class_report(self, y, yhat, prefix):
+        # # log metrics
+        # yhat = torch.where(yhat > 0.5, torch.tensor(1), torch.tensor(0))
+        # self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
+        # self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'))
+        # self.log(f'recall/{prefix}', recall_score(y, yhat, average='weighted'))
+        # self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+        # self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
+
+        # CLASSIFICATION REPORTS
+        report = classification_report(y, yhat, target_names=self.classlist, output_dict=True)  
+        report_fig = utils.plot.plot_to_image(utils.plot.plotly_bce_classification_report(report))
+        self.logger.experiment.add_image(f'classification_report/{prefix}', report_fig, self.global_step, dataformats='HWC')
+
+        self.logger.experiment.add_text(f'report/{prefix}', 
+            classification_report(y, yhat, target_names=self.classlist), self.global_step)
+
+        # # reshape to (class, batch) to do per-class scores
+        # y = y.t()
+        # yhat = yhat.t()
+        # for idx, (ytrue, ypred) in enumerate(zip(y, yhat)):
+        #     classname = self.classlist[idx]
+
+        #     self.log(f'accuracy/{classname}-{prefix}/epoch', accuracy_score(ytrue, ypred, normalize=True))
+        #     self.log(f'precision/{classname}-{prefix}/epoch', precision_score(ytrue, ypred))
+        #     self.log(f'recall/{classname}-{prefix}/epoch', recall_score(ytrue, ypred))
+        #     self.log(f'fscore/{classname}-{prefix}/epoch', fbeta_score(ytrue, ypred, beta=1))
+
     def _log_epoch_metrics(self, outputs, prefix='val'):
-        # TODO: need to add an if multiclass thing here
-        # calculate confusion matrices
         yhat = torch.cat([o['yhat'] for o in outputs]).detach().cpu()
         y = torch.cat([o['y'] for o in outputs]).detach().cpu()
         probits =  torch.cat([o['probits'] for o in outputs]).detach().cpu()
         loss = torch.stack([o['loss'] for o in outputs]).detach().cpu()
         
-        # print(f'set of val preds: {set(yhat.detach().cpu().numpy())}')
-        # print(f'set of val truths: {set(y.detach().cpu().numpy())}')
-        if self.multiclass:
-            # CONFUSION MATRIX
-            conf_matrix = sklearn.metrics.confusion_matrix(
-                y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
-                labels=list(range(len(self.classlist))), normalize=None)
-            conf_matrix = np.around(conf_matrix, 3)
-
-            # get plotly images as byte array
-            conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(conf_matrix, self.classlist))
-
-            # CONFUSION MATRIX (NORMALIZED)
-            norm_conf_matrix = sklearn.metrics.confusion_matrix(
-                y.detach().cpu().numpy(), yhat.detach().cpu().numpy(),
-                labels=list(range(len(self.classlist))), normalize='true')
-            norm_conf_matrix = np.around(norm_conf_matrix, 2)
-
-            # get plotly images as byte array
-            norm_conf_matrix = utils.plot.plot_to_image(utils.plot.plot_confusion_matrix(norm_conf_matrix, self.classlist))
-
-            # log metrics
-            self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
-            self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'))
-            self.log(f'recall/{prefix}', recall_score(y, yhat, average='weighted'))
-            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
-            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
-
-            self.log_uncertainty_metrics(probits, y, prefix)
-
-            self.logger.experiment.add_image(f'conf_matrix/{prefix}', conf_matrix, self.global_step, dataformats='HWC')
-            self.logger.experiment.add_image(f'conf_matrix_normalized/{prefix}', norm_conf_matrix, self.global_step, dataformats='HWC')
-        else:
-            # log metrics
-            yhat = torch.where(yhat > 0.5, torch.tensor(1), torch.tensor(0))
-            self.log(f'accuracy/{prefix}', accuracy_score(y, yhat, normalize=True))
-            self.log(f'precision/{prefix}', precision_score(y, yhat, average='weighted'))
-            self.log(f'recall/{prefix}', recall_score(y, yhat, average='weighted'))
-            self.log(f'fscore/{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
-            self.log(f'fscore_{prefix}', fbeta_score(y, yhat, average='weighted', beta=1))
-
-            # CLASSIFICATION REPORTS
-            report = classification_report(y, yhat, target_names=self.classlist, output_dict=True)  
-            report_fig = utils.plot.plot_to_image(utils.plot.plotly_bce_classification_report(report))
-            self.logger.experiment.add_image(f'classification_report/{prefix}', report_fig, self.global_step, dataformats='HWC')
-
-            self.logger.experiment.add_text(f'report/{prefix}', 
-                classification_report(y, yhat, target_names=self.classlist), self.global_step)
-
-            # reshape to (class, batch) to do per-class scores
-            y = y.t()
-            yhat = yhat.t()
-            for idx, (ytrue, ypred) in enumerate(zip(y, yhat)):
-                classname = self.classlist[idx]
-
-                self.log(f'accuracy/{classname}-{prefix}/epoch', accuracy_score(ytrue, ypred, normalize=True))
-                self.log(f'precision/{classname}-{prefix}/epoch', precision_score(ytrue, ypred))
-                self.log(f'recall/{classname}-{prefix}/epoch', recall_score(ytrue, ypred))
-                self.log(f'fscore/{classname}-{prefix}/epoch', fbeta_score(ytrue, ypred, beta=1))
+        self._epoch_multiclass_report(y, yhat, probits, prefix)
+        # self._epoch_per_class_report(y, yhat, prefix)
 
         return self.batch_detach(outputs)
 
 def train_instrument_detection_model(task, 
-                                    parent_name: str,
+                                    logger_save_dir: str,
                                     name: str,
                                     version: int,
                                     gpuid: int,
@@ -455,7 +404,6 @@ def train_instrument_detection_model(task,
                                     random_seed: int = 20, 
                                     test=False,
                                     **trainer_kwargs):
-    from test_tube import Experiment
     
     # seed everything!!!
     pl.seed_everything(random_seed)
@@ -463,26 +411,23 @@ def train_instrument_detection_model(task,
     # set up logger
     from pytorch_lightning.loggers import TestTubeLogger
     logger = TestTubeLogger(
-        save_dir=Path(log_dir)/parent_name,
+        save_dir=logger_save_dir,
         name=name, 
-        version=version, 
-        create_git_tag=True)
+        version=version)
 
     if version is None:
         version = logger.version
 
     # set up logging and checkpoint dirs
-    log_dir = os.path.join(log_dir, parent_name, name, f'version_{version}')
-    os.makedirs(log_dir, exist_ok=True)
     task.log_dir = log_dir
-    checkpoint_dir = os.path.join(log_dir, 'checkpoints')
+    checkpoint_dir = Path(log_dir) / 'checkpoints'
     best_ckpt = utils.train.get_best_ckpt_path(checkpoint_dir)
     
 
     # set up checkpoint callbacks
     from pytorch_lightning.callbacks import ModelCheckpoint
     checkpoint_callback = ModelCheckpoint(
-        filepath=checkpoint_dir + '/{epoch:02d}-{fscore_val:.2f}', 
+        filepath= str(checkpoint_dir  / '{epoch:02d}-{fscore_val:.2f}'), 
         monitor='fscore/val', 
         verbose=True, 
         mode='max',

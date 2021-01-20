@@ -49,9 +49,6 @@ def get_one_hot_matrix(record, classlist: list, resolution: float = 1.0):
         start_time = event['start_time']
         end_time = event['end_time']
 
-        # if end_time > duration:
-        #     warnings.warn(f'event end time is longer than duration.')
-
         start_idx = time_axis.index(quantize_floor(start_time, duration, duration / resolution))
 
         ceil = quantize_ceil(end_time, duration, duration / resolution)
@@ -70,6 +67,9 @@ def get_one_hot_matrix(record, classlist: list, resolution: float = 1.0):
 """
 record utils
 """
+def list_subdir(path):
+    return [o for o in os.listdir(path) if os.path.isdir(path / o)]
+
 def get_all_labels(record):
     """returns a list with all labels present in a 
     particular entry

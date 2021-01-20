@@ -13,7 +13,7 @@ from instrument_recognition.datasets import DataModule
 
 def dump_classlist(dm, save_dir):
     # get classlist and number of classes
-    classlist = dm.classlist()
+    classlist = dm.classlist
     print(f'classlist is: {classlist}')
     with open(os.path.join(save_dir, 'classlist.yaml'), 'w') as f:
         yaml.dump(classlist, f)
@@ -23,12 +23,14 @@ def run_task(hparams):
     print(f'loading datamodule...')
     dm = DataModule.from_argparse_args(hparams)
     dm.setup()
-    hparams.output_dim = len(dm.classlist())
+    hparams.output_dim = len(dm.classlist)
 
     # define a save dir
-    save_dir = ir.LOG_DIR / hparams.parent_name / hparams.name / f'version_{hparams.version}'
-    os.makedirs(save_dir, exist_ok=True)
-    dump_classlist(dm, save_dir)
+    logger_save_dir = ir.LOG_DIR / hparams.dataset_name / hparams.parent_name
+    log_dir = logger_save_dir / hparams.name / f'version_{hparams.version}'
+    os.makedirs(log_dir, exist_ok=True)
+    dump_classlist(dm, log_dir)
+    hparams.log_dir = str(log_dir)
 
     # load model
     print(f'loading model...')
@@ -40,12 +42,9 @@ def run_task(hparams):
 
     # run train fn and get back test results
     print(f'running task')
-    task, result = train_instrument_detection_model(task, parent_name=hparams.parent_name,  name=hparams.name, version=hparams.version,
+    task, result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
                                     gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
-                                    log_dir=ir.LOG_DIR, test=hparams.test)
-
-    # save model to torchscript
-    utils.train.save_torchscript_model(task.model, os.path.join(save_dir, 'torchscript_model.pt'), example_input=torch.zeros(task.model.input_shape))
+                                    log_dir=hparams.log_dir, test=hparams.test)
 
 if __name__ == "__main__":
     import argparse
@@ -77,6 +76,8 @@ if __name__ == "__main__":
 
     # create custom automatic name if auto
     if hparams.name.lower()[0:4] == 'auto':
-        hparams.name = f'{hparams.dataset_name}-{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}-mix{hparams.mixup}' + hparams.name[4:]
+        hparams.name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}' + hparams.name[4:]
+        if hparams.mixup:
+            hparams.name = hparams.name + '-mixup'
 
     run_task(hparams)

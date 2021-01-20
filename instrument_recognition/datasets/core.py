@@ -32,8 +32,6 @@ def remap_classes(records, remap_dict):
                 event['label'] = remap_dict[event['label']]
     return records
 
-# TODO: make it work nicely with openmic dataset
-
 class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, name: str, partition: str, embedding_name: str = None, 
@@ -65,8 +63,6 @@ class Dataset(torch.utils.data.Dataset):
         # use regular unwanted classes? 
         if unwanted_classes is None:
             pass
-            # from instrument_recognition.partition import unwanted_classes as uc
-            # unwanted_classes = uc
 
         # filter out unwanted classes
         if unwanted_classes is not None:
@@ -74,8 +70,10 @@ class Dataset(torch.utils.data.Dataset):
 
         # get only a class subset if that is desired
         if 'mdb-synthetic' in name:
-            class_subset = ['male singer', 'female singer', 'violin', 'clean electric guitar', 
-                            'distorted electric guitar', 'piano', 'clarinet', 'trumpet']
+            pass
+            # class_subset = ['male singer', 'female singer', 'violin', 'clean electric guitar', 
+            #                 'distorted electric guitar', 'piano', 'clarinet', 'trumpet']
+
         if class_subset is not None:
             self.filter_records_by_class_subset(class_subset)
 
@@ -87,7 +85,6 @@ class Dataset(torch.utils.data.Dataset):
         entry = self.records[index]
 
         # get input
-        # print(f'getting {index}')
         X = self.get_X(entry)
 
         # get labels
@@ -223,8 +220,13 @@ class DataModule(pl.LightningDataModule):
         train_partition = 'train-augmented' if Path(ir.DATA_DIR/self.name/'train-augmented').exists() and self.use_augmented else 'train'
         self.train_data = Dataset(name=self.name, partition=train_partition, embedding_name=self.embedding_name, **self.dataset_kwargs)
         self.dataset = self.train_data
+
         self.test_data = Dataset(name=self.name, partition='test', embedding_name=self.embedding_name, **self.dataset_kwargs)
-        self.val_data = self.test_data
+
+        if Path(ir.DATA_DIR/self.name/'validation').exists():
+            self.val_data = Dataset(name=self.name, partition='validation', embedding_name=self.embedding_name, **self.dataset_kwargs)
+        else:
+            self.val_data = self.test_data
 
         print('train entries:', len(self.train_data))
         print('val entries:', len(self.val_data))
@@ -232,6 +234,7 @@ class DataModule(pl.LightningDataModule):
     def setup(self):
         self.load_dataset()
     
+    @property
     def classlist(self):
         return self.dataset.classlist
 
