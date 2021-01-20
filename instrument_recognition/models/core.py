@@ -33,7 +33,7 @@ model_sizes = {
     'tiny':  dict(d_input=512,  d_intermediate=128, has_linear_proj=True),
     'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=False),
     'mid':   dict(d_input=6144, d_intermediate=512, has_linear_proj=True),
-    'huge':  dict(d_input=6144, d_intermediate=6144, has_linear_proj=False)
+    'huge':  dict(d_input=6144, d_intermediate=1024, has_linear_proj=True)
 }
 
 class Embedding(nn.Module):

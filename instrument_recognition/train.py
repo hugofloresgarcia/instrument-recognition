@@ -19,6 +19,12 @@ def dump_classlist(dm, save_dir):
         yaml.dump(classlist, f)
 
 def run_task(hparams):
+    # create custom automatic name if auto
+    if hparams.name.lower()[0:4] == 'auto':
+        hparams.name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}' + hparams.name[4:]
+        if hparams.mixup:
+            hparams.name = hparams.name + '-mixup'
+
     # load the datamodule
     print(f'loading datamodule...')
     dm = DataModule.from_argparse_args(hparams)
@@ -42,9 +48,21 @@ def run_task(hparams):
 
     # run train fn and get back test results
     print(f'running task')
-    task, result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
+    task, train_result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
                                     gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
                                     log_dir=hparams.log_dir, test=hparams.test)
+    
+    print(f'getting best model for testing')
+    best_model = ir.utils.train.load_best_model_from_test_tube(log_dir)
+    task.model = best_model
+    task, test_result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
+                                    gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
+                                    log_dir=hparams.log_dir, test=True)
+
+    # save test results
+    ir.utils.data.save_metadata_entry(test_result, str(log_dir / 'test_result.yaml'), 'json')
+
+    return test_result
 
 if __name__ == "__main__":
     import argparse
@@ -73,11 +91,5 @@ if __name__ == "__main__":
     parser = InstrumentDetectionTask.add_model_specific_args(parser)
 
     hparams = parser.parse_args()
-
-    # create custom automatic name if auto
-    if hparams.name.lower()[0:4] == 'auto':
-        hparams.name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}' + hparams.name[4:]
-        if hparams.mixup:
-            hparams.name = hparams.name + '-mixup'
 
     run_task(hparams)

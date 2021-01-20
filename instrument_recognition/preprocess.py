@@ -29,7 +29,7 @@ def load_model_from_str(name: str):
         model = torch.hub.load('harritaylor/torchvggish', 'vggish')
         model.eval()
     
-    if name[0] == 'cqt2dft':
+    elif name[0] == 'cqt2dft':
         pass
 
     else:
@@ -43,7 +43,8 @@ def _preprocess_openl3(model, name: str, model_name: str,  batch_size: int, num_
     dm.setup()
 
     loaders = ((dm.train_dataloader(), True, dm.train_data.root_dir), 
-                (dm.val_dataloader(), True,  dm.val_data.root_dir))
+                (dm.val_dataloader(), True,  dm.val_data.root_dir), 
+                (dm.test_dataloader(), True,  dm.test_data.root_dir))
 
     for loader, augment,  root_dir in loaders:
         pbar = tqdm.tqdm(loader)
@@ -80,7 +81,7 @@ def _preprocess_vggish(model, name:str, model_name: str, num_workers: int, devic
     dm = ir.datasets.DataModule(name, 1, num_workers)
     dm.setup()
 
-    for dataset in (dm.train_data, dm.test_data):
+    for dataset in (dm.train_data, dm.val_data, dm.test_data):
         pbar = tqdm.tqdm(range(len(dataset)))
         for idx in pbar:
             record = dataset[idx]
@@ -103,7 +104,7 @@ def _preprocess_cqt2dft(name: str, num_workers: int):
     dm = ir.datasets.DataModule(name, 1, num_workers)
     dm.setup()
 
-    for dataset in (dm.train_data, dm.test_data):
+    for dataset in (dm.train_data, dm.val_data, dm.test_data):
         pbar = tqdm.tqdm(range(len(dataset)))
         for idx in pbar:
             record = dataset[idx]

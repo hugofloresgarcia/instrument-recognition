@@ -31,6 +31,9 @@ def augment_dataset(name: str, partition: str, num_folds: int):
         source_dir = ir.DATA_DIR / name / partition
         dest_dir = ir.DATA_DIR / name / f'{partition}-augmented' / f'fold-{fold}'
 
+        if dest_dir.exists():
+            continue
+
         # get all dem metadata entries
         records = ir.utils.data.glob_all_metadata_entries(source_dir)
         source_dirs = [source_dir for r in range(len(records))]

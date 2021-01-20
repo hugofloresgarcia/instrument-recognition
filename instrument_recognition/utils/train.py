@@ -8,7 +8,7 @@ import torch
 
 import instrument_recognition as ir
 
-def load_best_model_from_test_tube(test_tube_dir):
+def load_best_model_from_test_tube(test_tube_dir: str):
     """because the model is wrapped in a Task object, 
     getting the best model is not trivial. Given a test tube dir
     (along with name and version), this function will load a Model

@@ -8,7 +8,7 @@ import collections
 
 import numpy as np
 import pandas as pd 
-import tqdm.contrib.concurrent
+import tqdm
 from sklearn.model_selection import train_test_split
 
 """
@@ -133,7 +133,7 @@ def glob_all_metadata_entries(root_dir, pattern='**/*.json'):
     pattern = os.path.join(root_dir, pattern)
     filepaths = glob.glob(pattern, recursive=True)
     # metadata = tqdm.contrib.concurrent.process_map(load_yaml, filepaths, max_workers=20, chunksize=20)
-    records = [load_metadata_entry(path) for path in filepaths]
+    records = [load_metadata_entry(path) for path in tqdm.tqdm(filepaths)]
     return records
 
 """

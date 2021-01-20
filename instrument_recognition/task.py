@@ -480,7 +480,8 @@ def train_instrument_detection_model(task,
     # train, then test
     if not test:
         trainer.fit(task)
-        result = trainer.test()
+        # result = trainer.test()
+        result = None
     else:
         result = trainer.test(task)
     return task, result
