@@ -29,7 +29,8 @@ install_requires = [
     'tqdm', 
     'soundfile',
     'librosa', 
-    # 'sox',  
+    'sox',  
+    'ray[tune]'
     'uncertainty_metrics', 
     'sklearn']
 
