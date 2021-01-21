@@ -19,9 +19,11 @@ def dump_classlist(dm, save_dir):
         yaml.dump(classlist, f)
 
 def run_task(hparams):
+    pl.seed_everything(hparams.random_seed)
+
     # create custom automatic name if auto
     if hparams.name.lower()[0:4] == 'auto':
-        hparams.name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}' + hparams.name[4:]
+        hparams.name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}-{hparams.random_seed}' + hparams.name[4:]
         if hparams.mixup:
             hparams.name = hparams.name + '-mixup'
 
@@ -83,6 +85,9 @@ if __name__ == "__main__":
 
     parser.add_argument('--max_epochs', type=int, default=100, 
         help='maximum number of epochs to train for')
+        
+    parser.add_argument('--random_seed', type=int, default=ir.RANDOM_SEED, 
+        help='random seed for experiment')
 
     parser.add_argument('--test', type=utils.parser_types.str2bool, default=False)
 

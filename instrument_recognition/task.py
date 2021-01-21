@@ -160,8 +160,18 @@ class InstrumentDetectionTask(pl.LightningModule):
             # MIXUP FORWARD PASS
             batch = self.preprocess(batch, train=train)
             assert self.is_seq_batch(batch['X'])
-            X, y_a, y_b, lam = utils.train.mixup_data(batch['X'], batch['y'], alpha=self.mixup_alpha, dim=1)
+
+            #FIXME: make this pretty
+            X = batch['X'].reshape(-1, *list(batch['X'].shape)[2:])
+            y = batch['y'].reshape(-1, *list(batch['y'].shape)[2:])
+            X, y_a, y_b, lam = utils.train.mixup_data(X, y, alpha=self.mixup_alpha, dim=0)
             # forward pass through model
+            s, b = batch['X'].shape[:2]
+            X = X.view(s, b, *list(batch['X'].shape)[2:])
+            y_a = y_a.view(s, b, *list(batch['y'].shape)[2:])
+            y_b = y_b.view(s, b, *list(batch['y'].shape)[2:])
+            ###
+
             yhat = self.model(X)
             loss = utils.train.mixup_criterion(self.criterion, yhat, y_a, y_b, lam)
             y = y_a if lam > 0.5 else y_b # keep this for traning metrics?
@@ -439,7 +449,6 @@ def train_instrument_detection_model(task,
         callbacks = []
 
     lr_logger = pl.callbacks.LearningRateMonitor(logging_interval='step')
-
     callbacks.append(lr_logger)
 
     if gpuid is not None:
@@ -466,15 +475,15 @@ def train_instrument_detection_model(task,
         checkpoint_callback=checkpoint_callback, 
         logger=logger,
         terminate_on_nan=True,
-        resume_from_checkpoint=best_ckpt, 
-        weights_summary='full', 
-        log_gpu_memory=True, 
+        resume_from_checkpoint=best_ckpt,
+        weights_summary='full',
+        log_gpu_memory=True,
         gpus=gpus,
         profiler=pl.profiler.SimpleProfiler(
                     output_filename=os.path.join(log_dir, 'profiler-report.txt')), 
         gradient_clip_val=1, 
         deterministic=True,
-        num_sanity_val_steps=0, 
+        num_sanity_val_steps=0,
         **trainer_kwargs)
 
     # train, then test
