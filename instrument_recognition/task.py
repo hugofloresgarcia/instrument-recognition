@@ -439,7 +439,7 @@ def train_instrument_detection_model(task,
     checkpoint_callback = ModelCheckpoint(
         filepath= str(checkpoint_dir  / '{epoch:02d}-{fscore_val:.2f}'), 
         monitor='fscore/val', 
-        verbose=True, 
+        verbose=False, 
         mode='max',
         save_top_k=3)
     
@@ -450,6 +450,13 @@ def train_instrument_detection_model(task,
 
     lr_logger = pl.callbacks.LearningRateMonitor(logging_interval='step')
     callbacks.append(lr_logger)
+
+    from ray.tune.integration.pytorch_lightning import TuneReportCallback
+    callbacks.append(
+        TuneReportCallback({
+            "loss_val": "loss/val",
+            "fscore_val": "fscore_val", 
+        }, on="validation_end"))
 
     if gpuid is not None:
         if gpuid == -1:
@@ -477,6 +484,7 @@ def train_instrument_detection_model(task,
         terminate_on_nan=True,
         resume_from_checkpoint=best_ckpt,
         weights_summary='full',
+        progress_bar_refresh_rate=0, 
         log_gpu_memory=True,
         gpus=gpus,
         profiler=pl.profiler.SimpleProfiler(
@@ -487,10 +495,14 @@ def train_instrument_detection_model(task,
         **trainer_kwargs)
 
     # train, then test
-    if not test:
-        trainer.fit(task)
-        # result = trainer.test()
-        result = None
-    else:
+
+    trainer.fit(task)
+
+    if test:
+        best_model = ir.utils.train.load_best_model_from_test_tube(task.log_dir)
+        task.model = best_model
         result = trainer.test(task)
+    else:
+        result = None
+
     return task, result

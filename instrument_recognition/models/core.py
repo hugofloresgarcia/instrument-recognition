@@ -28,10 +28,10 @@ recurrent_model_sizes = {
 }
 
 model_sizes = {
-    'cqt2dft': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
-    'vggish': dict(d_input=128, d_intermediate=128, has_linear_proj=False),
+    'cqt2dft': dict(d_input=128, d_intermediate=128, has_linear_proj=True),
+    'vggish': dict(d_input=128, d_intermediate=128, has_linear_proj=True),
     'tiny':  dict(d_input=512,  d_intermediate=128, has_linear_proj=True),
-    'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=False),
+    'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=True),
     'mid':   dict(d_input=6144, d_intermediate=512, has_linear_proj=True),
     'huge':  dict(d_input=6144, d_intermediate=1024, has_linear_proj=True)
 }
@@ -103,7 +103,6 @@ class Model(pl.LightningModule):
 
         # add the fully connected classifier :)
         self.fc_output = nn.Sequential(
-                    nn.BatchNorm1d(r_dim), 
                     nn.Linear(r_dim, output_dim))
     
     @classmethod
@@ -154,7 +153,7 @@ class Model(pl.LightningModule):
 
         # input should be (sequence, batch, embedding)
         assert x.ndim == 3
-        assert x.shape[-1] == model_sizes[self.model_size]['d_input']
+        assert x.shape[-1] == model_sizes[self.model_size]['d_input'], f'{x.shape[-1]}-{model_sizes[self.model_size]["d_input"]}'
 
         if self.has_linear_proj:
             x = self._linear(x, self.fc_proj)

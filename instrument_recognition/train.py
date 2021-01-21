@@ -1,3 +1,4 @@
+from multiprocessing import Value
 import os
 
 import yaml
@@ -18,14 +19,37 @@ def dump_classlist(dm, save_dir):
     with open(os.path.join(save_dir, 'classlist.yaml'), 'w') as f:
         yaml.dump(classlist, f)
 
+def get_trial_dir(hparams):
+    return get_exp_dir(hparams) / hparams.name / f'version_{hparams.version}'
+
+def get_exp_dir(hparams):
+    return ir.LOG_DIR / hparams.dataset_name / hparams.parent_name
+
+def get_exp_name(hparams):
+    if hparams.name.lower()[0:4] == 'auto':
+        name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}-{hparams.random_seed}' + hparams.name[4:]
+        if hparams.mixup:
+            name = name + '-mixup'
+    else:
+        return hparams.name
+    return name
+
+def parse_model_def(hparams):
+    if hasattr(hparams, 'input_repr_model_size'):
+        print(hparams.input_repr_model_size)
+        hparams.embedding_name, hparams.model_size = hparams.input_repr_model_size
+    elif hasattr(hparams, 'input_repr') and hasattr(hparams, 'model_size'):
+        pass
+    else:
+        raise ValueError
+    return hparams
+
 def run_task(hparams):
     pl.seed_everything(hparams.random_seed)
 
     # create custom automatic name if auto
-    if hparams.name.lower()[0:4] == 'auto':
-        hparams.name = f'{hparams.embedding_name}-{hparams.model_size}-{hparams.recurrence_type}-{hparams.loss_fn}-{hparams.random_seed}' + hparams.name[4:]
-        if hparams.mixup:
-            hparams.name = hparams.name + '-mixup'
+    hparams.name = get_exp_name(hparams)
+    hparams = parse_model_def(hparams)
 
     # load the datamodule
     print(f'loading datamodule...')
@@ -34,11 +58,11 @@ def run_task(hparams):
     hparams.output_dim = len(dm.classlist)
 
     # define a save dir
-    logger_save_dir = ir.LOG_DIR / hparams.dataset_name / hparams.parent_name
-    log_dir = logger_save_dir / hparams.name / f'version_{hparams.version}'
+    logger_save_dir = get_exp_dir(hparams)
+    log_dir = get_trial_dir(hparams)
+    hparams.log_dir = str(log_dir)
     os.makedirs(log_dir, exist_ok=True)
     dump_classlist(dm, log_dir)
-    hparams.log_dir = str(log_dir)
 
     # load model
     print(f'loading model...')
@@ -50,21 +74,14 @@ def run_task(hparams):
 
     # run train fn and get back test results
     print(f'running task')
-    task, train_result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
-                                    gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
-                                    log_dir=hparams.log_dir, test=hparams.test)
-    
-    print(f'getting best model for testing')
-    best_model = ir.utils.train.load_best_model_from_test_tube(log_dir)
-    task.model = best_model
-    task, test_result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
-                                    gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=ir.RANDOM_SEED, 
+    task, result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
+                                    gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=hparams.random_seed, 
                                     log_dir=hparams.log_dir, test=True)
 
     # save test results
-    ir.utils.data.save_metadata_entry(test_result, str(log_dir / 'test_result.yaml'), 'json')
+    ir.utils.data.save_metadata_entry(result, str(log_dir / 'test_result.yaml'), 'json')
 
-    return test_result
+    return result
 
 if __name__ == "__main__":
     import argparse
