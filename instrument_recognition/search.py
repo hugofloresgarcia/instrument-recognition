@@ -1,14 +1,11 @@
-""" massive dump of experiment defs
+""" hyperparam search! :)
 """
-from collections import namedtuple
 from functools import partial
 import instrument_recognition as ir
 import numpy as np
 from ray import tune
 from ray.tune import CLIReporter
-from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
-from ray.tune.integration.pytorch_lightning import TuneReportCallback, \
-    TuneReportCheckpointCallback
+from ray.tune.schedulers import ASHAScheduler
 
 DEFAULTS =  {
     'parent_name': 'TUNING',
@@ -34,9 +31,21 @@ DEFAULTS =  {
     'recurrence_type': 'transformer', 
 }
 
-class Namespace:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
+CONFIGS = {
+    'ballztothewallz': {
+            "learning_rate": tune.loguniform(1e-4, 1e-1),
+            "batch_size": tune.choice([32, 64, 128, 256]),
+            "input_repr_model_size": tune.choice([('openl3-mel256-512-music', 'tiny'), 
+                                    ('openl3-mel256-512-music', 'small'),
+                                    ('openl3-mel256-6144-music', 'mid'),
+                                    ('openl3-mel256-6144-music', 'huge')]), 
+            "use_augmented": tune.choice([True, False]),
+            "dropout": tune.choice([0.1, 0.3, 0.5]),
+            "recurrence_type": tune.choice(["bilstm", "transformer", "bigru", "none"]),
+            "random_seed": tune.choice([1, 13, 23, 42, 440]), 
+            "mixup": tune.choice([True, False])
+    }, 
+}
 
 class Experiment:
     def __init__(self, defaults: dict, config: dict, gpu_fraction: float):
@@ -109,20 +118,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    config = {
-        "learning_rate": tune.loguniform(1e-4, 1e-1),
-        "batch_size": tune.choice([32, 64, 128, 256]),
-        "input_repr_model_size": tune.choice([('openl3-mel256-512-music', 'tiny'), 
-                                  ('openl3-mel256-512-music', 'small'),
-                                  ('openl3-mel256-6144-music', 'mid'),
-                                  ('openl3-mel256-6144-music', 'huge')]), 
-        "use_augmented": tune.choice([True, False]),
-        "dropout": tune.choice([0.1, 0.3, 0.5]),
-        "recurrence_type": tune.choice(["bilstm", "transformer", "bigru", "none"]),
-        "random_seed": tune.choice([1, 13, 23, 42, 440]), 
-        "mixup": tune.choice([True, False])
-    }
-
-    exp = Experiment(defaults=DEFAULTS, config=config, gpu_fraction=0.25)
+    exp = Experiment(defaults=DEFAULTS, config=CONFIGS[args.name], gpu_fraction=0.25)
 
     run_experiment(exp, args.num_samples)
