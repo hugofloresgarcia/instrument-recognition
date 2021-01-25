@@ -2,6 +2,7 @@
 """
 from pathlib import Path
 import os
+import glob
 
 import scaper
 import librosa
@@ -51,6 +52,9 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
     for partition in partitions:
         fg_path = data_dir/dataset/partition/'foreground'
         bg_path = data_dir/dataset/partition/'background'
+        if not bg_path.exists():
+            os.makedirs(bg_path)
+            
         soundscapes_path = data_dir/name/partition
 
         total_len_s = sum([get_audio_duration(str(fg_path/subd/d)) for subd in os.listdir(fg_path) for d in os.listdir(fg_path/subd) if Path(d).suffix == '.wav'])
@@ -140,13 +144,36 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
                         no_audio=False,
                         txt_path=str(txtfile), fix_clipping=True)
 
+def records2scaper(name: str, dataset: str):
+    data_dir = ir.DATA_DIR
+
+    # lets go
+    partitions = ir.utils.data.list_subdir(data_dir/dataset)
+
+    for partition in partitions:
+        fg_path = data_dir/name/partition/'foreground'
+        bg_path = data_dir/name/partition/'background'
+        os.makedirs(fg_path, exist_ok=False)
+        os.makedirs(bg_path, exist_ok=False)
+
+        # read all metadata
+        root_dir = data_dir/dataset/partition
+        records = ir.utils.data.glob_all_metadata_entries(root_dir=root_dir)
+        for record in records:
+            assert len(record['events']) == 1
+            label = record['events'][0]['label']
+            filename = Path(record['path_to_audio']).relative_to(root_dir)
+            assert Path(record['path_to_audio']).exists()
+            os.makedirs(fg_path/label/filename.parent, exist_ok=True)
+            os.symlink(src=record['path_to_audio'], dst=fg_path/label/filename)
 
 if __name__ == "__main__":
     import argparse
     from instrument_recognition import utils
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser.add_argument('--records2scaper', type=utils.str2bool, default=False)
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--dataset', type=str, default='medleydb')
     parser.add_argument('--monophonic', type=utils.str2bool, default=True)
@@ -156,5 +183,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    make_soundscapes(name=args.name, dataset=args.dataset, monophonic=args.monophonic, 
+    if args.records2scaper:
+        records2scaper(args.name, args.dataset)
+    else:
+        make_soundscapes(name=args.name, dataset=args.dataset, monophonic=args.monophonic, 
                      min_events=args.min_events, max_events=args.max_events, duration=args.duration)

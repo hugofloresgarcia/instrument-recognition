@@ -16,7 +16,7 @@ from instrument_recognition import utils
 ALL_MODEL_NAMES = ('openl3-mel128-6144-music', 'openl3-mel256-6144-music',
                   'openl3-mel128-512-music', 'openl3-mel256-512-music',
                   'openl3-mel128-6144-env', 'openl3-mel256-6144-env',
-                  'openl3-mel128-512-env', 'openl3-mel256-512-env')
+                  'openl3-mel128-512-env', 'openl3-mel256-512-env', 'vggish')
 
 def load_model_from_str(name: str):
     name = name.split('-')
@@ -30,6 +30,7 @@ def load_model_from_str(name: str):
         model.eval()
     
     elif name[0] == 'cqt2dft':
+        model = None
         pass
 
     else:
@@ -155,7 +156,7 @@ def preprocess_dataset(name: str, model_name: str, batch_size: int, num_workers:
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--name', type=str, nargs='+')
     parser.add_argument('--model', type=str, nargs='+')
@@ -164,7 +165,13 @@ if __name__ == "__main__":
     parser.add_argument('--device', type=int, default=0)
 
     args = parser.parse_args()
-    models = ALL_MODEL_NAMES if args.model == 'all' else args.model
+    models = ALL_MODEL_NAMES if args.model == ['all'] else args.model
+    print(models)
     for model in models:
         for name in args.name:
+            cache_dir = ir.CACHE_DIR / model / name
+            if cache_dir.exists():
+                print(f'found {cache_dir}, which means I wont preprocess model:'\
+                        '{model} for dataset {name}. delete this directory if you wish to preprocess this data again.')
+                continue
             preprocess_dataset(name, model, args.batch_size, args.num_workers, args.device)

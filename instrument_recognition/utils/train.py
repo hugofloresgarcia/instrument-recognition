@@ -15,6 +15,8 @@ def load_best_model_from_test_tube(test_tube_dir: str):
     with its state dict. 
     """
     ckpt = ir.utils.train.get_best_ckpt_path(test_tube_dir / 'checkpoints')
+    print(test_tube_dir)
+    print(ckpt)
 
     ckpt = torch.load(ckpt)
 

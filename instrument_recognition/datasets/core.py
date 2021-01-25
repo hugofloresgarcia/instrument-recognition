@@ -99,6 +99,11 @@ class Dataset(torch.utils.data.Dataset):
         item.update(data)
         item['record_index'] = index
 
+        if 'effect_params' in item:
+            del item['effect_params']
+        if 'path_to_effect_params' in item:
+            del item['path_to_effect_params']
+
         return item
 
     def setup_dataset(self, records):
@@ -139,7 +144,7 @@ class Dataset(torch.utils.data.Dataset):
 
             return torch.from_numpy(audio)
         else:
-            path_to_embedding = self.cache_dir / Path(Path(entry['path_to_audio']).relative_to(self.root_dir)).with_suffix('.npy')
+            path_to_embedding = self.cache_dir.parent / Path(Path(entry['path_to_audio']).relative_to(self.root_dir.parent)).with_suffix('.npy')
             assert path_to_embedding.exists(), f"{path_to_embedding} does not exist :("
             X = np.load(path_to_embedding)
             X = np.abs(X)

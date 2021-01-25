@@ -8,18 +8,18 @@ from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
 DEFAULTS =  {
-    'parent_name': 'TUNING',
+    'parent_name': 'DEFAULT',
     'name': 'auto', 
     'version': 0, 
     'gpuid': 0, 
     'random_seed': 42,
     'test': False,
 
-    'max_epochs': 2, 
+    'max_epochs': 250, 
     'loss_fn': 'wce', 
     'mixup': False, 
     'mixup_alpha': 0.2,
-    'dropout': 0.1, 
+    'dropout': 0.4, 
 
     'dataset_name': "mdb-solos", 
     'use_augmented': True, 
@@ -27,12 +27,14 @@ DEFAULTS =  {
     'num_workers': 20,
 
     'embedding_name': 'openl3-mel256-512-music', 
-    'model_size': 'small', 
-    'recurrence_type': 'transformer', 
+    # NOTE: all of these three should be intertwined?
+    'hidden_dim': 512, 
+    'recurrence_type': 'transformer-8', 
+    'recurrence_num_layers': 1,
 }
 
 CONFIGS = {
-    'ballztothewallz': {
+    'ballz2dawallz': {
             "learning_rate": tune.loguniform(1e-4, 1e-1),
             "batch_size": tune.choice([32, 64, 128, 256]),
             "input_repr_model_size": tune.choice([('openl3-mel256-512-music', 'tiny'), 
@@ -40,7 +42,7 @@ CONFIGS = {
                                     ('openl3-mel256-6144-music', 'mid'),
                                     ('openl3-mel256-6144-music', 'huge')]), 
             "use_augmented": tune.choice([True, False]),
-            "dropout": tune.choice([0.1, 0.3, 0.5]),
+            "dropout": tune.uniform(0.0, 0.5),
             "recurrence_type": tune.choice(["bilstm", "transformer", "bigru", "none"]),
             "random_seed": tune.choice([1, 13, 23, 42, 440]), 
             "mixup": tune.choice([True, False])
@@ -88,7 +90,7 @@ def run_experiment(exp, num_samples):
         metric="fscore_val",
         mode="max",
         max_t=exp.hparams.max_epochs,
-        grace_period=1, #exp.hparams.max_epochs // 8,
+        grace_period=exp.hparams.max_epochs // 8,
         reduction_factor=2)
 
     reporter = CLIReporter(
@@ -99,7 +101,7 @@ def run_experiment(exp, num_samples):
         name=exp.hparams.parent_name,
         local_dir=str(ir.train.get_exp_dir(exp.hparams)),
         resources_per_trial={"cpu": 1, "gpu": exp.gpu_fraction},
-        config=config,
+        config=exp.config,
         num_samples=num_samples,
         scheduler=scheduler,
         progress_reporter=reporter)
@@ -111,13 +113,13 @@ def run_experiment(exp, num_samples):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--num_samples', type=int, default=1)
     
     args = parser.parse_args()
 
-    exp = Experiment(defaults=DEFAULTS, config=CONFIGS[args.name], gpu_fraction=0.25)
+    exp = Experiment(defaults=DEFAULTS, config=CONFIGS[args.name], gpu_fraction=0.2)
 
     run_experiment(exp, args.num_samples)

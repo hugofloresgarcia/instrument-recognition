@@ -1,5 +1,7 @@
 from multiprocessing import Value
 import os
+from pathlib import Path
+import argparse
 
 import yaml
 import torch
@@ -77,18 +79,40 @@ def run_task(hparams):
     print(f'running task')
     task, result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
                                     gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=hparams.random_seed, 
-                                    log_dir=hparams.log_dir, test=True)
+                                    log_dir=hparams.log_dir, test=False)
 
     # save test results
     ir.utils.data.save_metadata_entry(result, str(log_dir / 'test_result.yaml'), 'json')
 
     return result
 
-if __name__ == "__main__":
-    import argparse
-    from instrument_recognition.utils import str2bool
+def test_model_from_checkpoint(test_tube_dir: str, gpuid=0, random_seed=440):
+    # load the checkpoint
+    ckpt = torch.load(ir.utils.train.get_best_ckpt_path(Path(test_tube_dir) / 'checkpoints'))
 
-    parser = argparse.ArgumentParser()
+    # get the best model
+    model = ir.utils.train.load_best_model_from_test_tube(test_tube_dir)
+
+    # get the hyperparams
+    hparams = argparse.Namespace(**ckpt['hyper_parameters'])
+    hparams.random_seed = random_seed
+
+    # get the datamodule
+    dm = DataModule.from_argparse_args(hparams)
+    dm.setup()
+
+    # build the task
+    task = InstrumentDetectionTask.from_hparams(model, dm, hparams)
+
+    task, result = train_instrument_detection_model(task, logger_save_dir=get_exp_dir(hparams), name=f'{hparams.name}-test',
+                                                 version=hparams.version, gpuid=gpuid, log_dir=hparams.log_dir, max_epochs=hparams.max_epochs, 
+                                                 random_seed=hparams.random_seed, test=True)
+    
+    return result, vars(hparams)
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--parent_name', type=str, required=True,
         help='name of parent dir where experiment will be stored')
 

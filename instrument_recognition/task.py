@@ -205,7 +205,8 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):  
         # get result of forward pass
-        result = self._main_step(batch,batch_idx)
+        with torch.no_grad():
+            result = self._main_step(batch,batch_idx)
 
         # update the batch with the result 
         batch.update(result)
@@ -223,7 +224,8 @@ class InstrumentDetectionTask(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):  
         # get result of forward pass
-        result = self._main_step(batch,batch_idx)
+        with torch.no_grad():
+            result = self._main_step(batch,batch_idx)
 
         # update the batch with the result 
         batch.update(result)
@@ -278,10 +280,10 @@ class InstrumentDetectionTask(pl.LightningModule):
         ece = um.ece(y, probits, num_bins=30)
         self.log(f'ECE/{prefix}', ece, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
-        if prefix == 'test':
-            print('computing reliability')
-            reliability_fig = um.reliability_diagram(probits, y)
-            self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
+        # if prefix == 'test':
+        #     print('computing reliability')
+        #     reliability_fig = um.reliability_diagram(probits, y)
+        #     self.logger.experiment.add_figure(f'reliability/{prefix}', reliability_fig, self.global_step)
 
             # log_dir = self.log_dir
             # confidences, accuracies, xbins = um._reliability_diagram_xy(probits, y)
@@ -496,13 +498,10 @@ def train_instrument_detection_model(task,
 
     # train, then test
 
-    trainer.fit(task)
-
-    if test:
-        best_model = ir.utils.train.load_best_model_from_test_tube(task.log_dir)
-        task.model = best_model
-        result = trainer.test(task)
-    else:
+    if not test:
+        trainer.fit(task)
         result = None
+    else:
+        result = trainer.test(task)
 
     return task, result

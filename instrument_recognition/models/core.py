@@ -9,24 +9,6 @@ from instrument_recognition.models.transformer import TransformerEncoder
 BATCH_FIRST = False
 DEFAULT_SEQ_LEN = 10
 
-recurrent_model_sizes = {
-    'lstm': {
-        'num_layers': 2, 
-        'num_heads': None},
-    'bilstm': {
-        'num_layers': 2, 
-        'num_heads': None},
-    'gru': {
-        'num_layers': 2, 
-        'num_heads': None},
-    'bigru': {
-        'num_layers': 2, 
-        'num_heads': None},
-    'transformer': {
-        'num_layers': 2, 
-        'num_heads': 4},
-}
-
 model_sizes = {
     'cqt2dft': dict(d_input=128, d_intermediate=128, has_linear_proj=True),
     'vggish': dict(d_input=128, d_intermediate=128, has_linear_proj=True),
@@ -34,6 +16,20 @@ model_sizes = {
     'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=True),
     'mid':   dict(d_input=6144, d_intermediate=512, has_linear_proj=True),
     'huge':  dict(d_input=6144, d_intermediate=1024, has_linear_proj=True)
+}
+
+INPUT_DIMS = {
+    'vggish': 128,
+
+    'openl3-mel128-512-music':  512,
+    'openl3-mel256-512-music':  512,
+    'openl3-mel128-512-env':  512,
+    'openl3-mel256-512-env':  512,
+
+    'openl3-mel128-6144-music':  6144,
+    'openl3-mel256-6144-music':  6144,
+    'openl3-mel128-6144-env':  6144,
+    'openl3-mel256-6144-env':  6144,
 }
 
 class Embedding(nn.Module):
@@ -59,43 +55,41 @@ class Embedding(nn.Module):
 #TODO: add batchnorm
 class Model(pl.LightningModule):
 
-    def __init__(self, model_size: str, output_dim: int, 
-               recurrence_type: str = 'bilstm', dropout: float = 0.3, **kwargs):
+    def __init__(self, embedding_name: str, hidden_dim: int, output_dim: int, 
+               recurrence_type: str = 'bilstm', recurrence_num_layers: int = 2, 
+                dropout: float = 0.3, **kwargs):
         super().__init__()
         self.save_hyperparameters()
         self.output_dim = output_dim
-        self.model_size = model_size
         self.recurrence_type = recurrence_type
-        self.has_linear_proj = model_sizes[model_size]['has_linear_proj']
+        self.recurrence_num_layers = recurrence_num_layers
         self.has_recurrent_layer = False if recurrence_type.lower() == 'none' else True
 
         assert self.output_dim > 0
         assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
 
-        d_input = model_sizes[model_size]['d_input']
-        d_intermediate = model_sizes[model_size]['d_intermediate']
+        d_input = INPUT_DIMS[embedding_name]
+        d_intermediate = hidden_dim
 
         self.input_shape = (1, DEFAULT_SEQ_LEN, d_input)
 
-        if model_size == 'cqt2dft':
+        if embedding_name == 'cqt2dft':
             from instrument_recognition.models.embed import CQT2DFTEmbedding
             self.conv = CQT2DFTEmbedding()
             self.input_shape = (1, DEFAULT_SEQ_LEN, 240, 76)
 
-        # add the proper linear transformation depending on model size
-        if self.has_linear_proj:
-            self.fc_proj = nn.Sequential(
-                nn.BatchNorm1d(d_input), 
-                nn.Linear(d_input, d_intermediate), 
-                nn.ReLU()
-            )
+        # linear projection layer
+        self.fc_proj = nn.Sequential(
+            nn.BatchNorm1d(d_input), 
+            nn.Linear(d_input, d_intermediate), 
+            nn.ReLU()
+        )
 
         # add recurrent layers
         if self.has_recurrent_layer:
-            num_layers = recurrent_model_sizes[recurrence_type]['num_layers']
-            num_heads = recurrent_model_sizes[recurrence_type]['num_heads']
-            recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=d_intermediate, num_layers=num_layers, 
-                                                        d_hidden=d_intermediate, num_heads=num_heads, dropout=dropout)
+            num_layers = self.recurrence_num_layers
+            recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=d_intermediate, 
+                                                        num_layers=num_layers, d_hidden=d_intermediate, dropout=dropout)
             # recurrent_layer = nn.Sequential(nn.BatchNorm1d(d_intermediate), recurrent_layer)
             self.__setattr__(name=recurrence_type, value=recurrent_layer)
         else:
@@ -107,6 +101,7 @@ class Model(pl.LightningModule):
     
     @classmethod
     def from_hparams(cls, hparams):
+        assert hasattr(hparams, 'embedding_name')
         obj = cls(**vars(hparams))
         obj.hparams = hparams
         return obj
@@ -114,10 +109,12 @@ class Model(pl.LightningModule):
     @classmethod
     def add_model_specific_args(cls, parent_parser):
         parser = parent_parser
-        parser.add_argument('--model_size', type=str, required=True, 
-            help=f'model size. one of {model_sizes.keys()}')
+        parser.add_argument('--hidden_dim', type=int, required=True, 
+            help=f'hidden dimension size.')
         parser.add_argument('--recurrence_type', type=str, default='none',
-            help=f'type of recurrence. one of {recurrent_model_sizes.keys()}')
+            help=f'type of recurrence.')
+        parser.add_argument('--recurrence_num_layers', type=int, default=2, 
+            help=f'number of stacked recurrent layers for model')
         parser.add_argument('--dropout', type=float, default=0.3, 
             help='dropout for model')
         return parser
@@ -176,7 +173,7 @@ class Model(pl.LightningModule):
         return x
 
 def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers: int = 4,
-                        d_hidden: int = 128, num_heads: int = 4, dropout: float = 0.3):
+                        d_hidden: int = 128, dropout: float = 0.3):
     if 'lstm' in layer_name:
         bidirectional = 'bi' in layer_name
         num_directions = 2 if 'bi' in layer_name else 1
@@ -192,18 +189,16 @@ def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers:
         output_dim = d_hidden * num_directions
     
     elif 'transformer' in layer_name:
-        layer = TransformerEncoder(d_model=d_in, num_heads=num_heads, d_hidden=d_hidden*4, 
+        # NOTE: DEFAULT NUMBER OF HEADS IN TRANSFORMER
+        if '-' not in layer_name:
+            num_heads = 4
+        _, num_heads = layer_name.split('-')
+        layer = TransformerEncoder(d_model=d_in, num_heads=num_heads, d_hidden=d_hidden, 
                                    num_layers=num_layers, dropout=dropout)
         output_dim = d_in
+
+    else: 
+        raise ValueError(f'incorrect layer name: {layer_name}')
     
     return layer, output_dim
-
-if __name__ == '__main__':
-    from itertools import product
-    from torchsummaryX import summary
-    # get a param count for all models
-    for size, recurrence_type in product(model_sizes.keys(), recurrent_model_sizes.keys()):
-        model = Model(model_size=size, output_dim=20, recurrence_type=recurrence_type)
-        sample_input = torch.zeros(model.input_shape)
-        print(summary(model, sample_input))
 

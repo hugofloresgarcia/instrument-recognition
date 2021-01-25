@@ -130,7 +130,7 @@ def split_on_silence_and_save(partition_map, target_sr, dataset, audio_format):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--dataset', type=str, required=True)
     
