@@ -22,10 +22,10 @@ def dump_classlist(dm, save_dir):
         yaml.dump(classlist, f)
 
 def get_trial_dir(hparams):
-    return get_exp_dir(hparams) / hparams.name / f'version_{hparams.version}'
+    return get_exp_dir(hparams)  / hparams.name / f'version_{hparams.version}'
 
 def get_exp_dir(hparams):
-    return ir.LOG_DIR / hparams.dataset_name / hparams.parent_name
+    return ir.LOG_DIR  / hparams.parent_name 
 
 def get_exp_name(hparams):
     if hparams.name.lower()[0:4] == 'auto':
@@ -36,23 +36,15 @@ def get_exp_name(hparams):
         return hparams.name
     return name
 
-def parse_model_def(hparams):
-    if hasattr(hparams, 'input_repr_model_size'):
-        print(hparams.input_repr_model_size)
-        hparams.embedding_name, hparams.model_size = hparams.input_repr_model_size
-    elif hasattr(hparams, 'input_repr') and hasattr(hparams, 'model_size'):
-        pass
-    else:
-        raise ValueError
-    return hparams
+def get_num_params(model):
+     return sum(p.numel() for p in model.parameters())
 
-def run_task(hparams):
+
+def run_task(hparams, use_ray=False):
     pl.seed_everything(hparams.random_seed)
 
     # create custom automatic name if auto
     hparams.name = get_exp_name(hparams)
-    # NOTE: this a patch to enable hyperparam search with raytune
-    hparams = parse_model_def(hparams)
 
     # load the datamodule
     print(f'loading datamodule...')
@@ -70,6 +62,7 @@ def run_task(hparams):
     # load model
     print(f'loading model...')
     model = Model.from_hparams(hparams)
+    hparams.num_trainable_params = get_num_params(model)
     
     # build task
     print(f'building task...')
@@ -79,10 +72,7 @@ def run_task(hparams):
     print(f'running task')
     task, result = train_instrument_detection_model(task, logger_save_dir=logger_save_dir,  name=hparams.name, version=hparams.version,
                                     gpuid=hparams.gpuid, max_epochs=hparams.max_epochs, random_seed=hparams.random_seed, 
-                                    log_dir=hparams.log_dir, test=False)
-
-    # save test results
-    ir.utils.data.save_metadata_entry(result, str(log_dir / 'test_result.yaml'), 'json')
+                                    log_dir=hparams.log_dir, test=False, use_ray_tune=use_ray)
 
     return result
 
@@ -96,6 +86,7 @@ def test_model_from_checkpoint(test_tube_dir: str, gpuid=0, random_seed=440):
     # get the hyperparams
     hparams = argparse.Namespace(**ckpt['hyper_parameters'])
     hparams.random_seed = random_seed
+    hparams.parent_name = f'{hparams.parent_name}-TEST'
 
     # get the datamodule
     dm = DataModule.from_argparse_args(hparams)
@@ -104,9 +95,9 @@ def test_model_from_checkpoint(test_tube_dir: str, gpuid=0, random_seed=440):
     # build the task
     task = InstrumentDetectionTask.from_hparams(model, dm, hparams)
 
-    task, result = train_instrument_detection_model(task, logger_save_dir=get_exp_dir(hparams), name=f'{hparams.name}-test',
+    task, result = train_instrument_detection_model(task, logger_save_dir=get_exp_dir(hparams), name=f'{hparams.name}',
                                                  version=hparams.version, gpuid=gpuid, log_dir=hparams.log_dir, max_epochs=hparams.max_epochs, 
-                                                 random_seed=hparams.random_seed, test=True)
+                                                 random_seed=hparams.random_seed, test=True, use_ray_tune=False)
     
     return result, vars(hparams)
 

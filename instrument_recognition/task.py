@@ -415,6 +415,7 @@ def train_instrument_detection_model(task,
                                     max_epochs: int = 100,
                                     random_seed: int = 20, 
                                     test=False,
+                                    use_ray_tune=True,
                                     **trainer_kwargs):
     
     # seed everything!!!
@@ -443,7 +444,7 @@ def train_instrument_detection_model(task,
         monitor='fscore/val', 
         verbose=False, 
         mode='max',
-        save_top_k=3)
+        save_top_k=1)
     
     if hasattr(task, 'callback_list'):
         callbacks = task.callback_list
@@ -453,12 +454,13 @@ def train_instrument_detection_model(task,
     lr_logger = pl.callbacks.LearningRateMonitor(logging_interval='step')
     callbacks.append(lr_logger)
 
-    from ray.tune.integration.pytorch_lightning import TuneReportCallback
-    callbacks.append(
-        TuneReportCallback({
-            "loss_val": "loss/val",
-            "fscore_val": "fscore_val", 
-        }, on="validation_end"))
+    if use_ray_tune:
+        from ray.tune.integration.pytorch_lightning import TuneReportCallback
+        callbacks.append(
+            TuneReportCallback({
+                "loss_val": "loss/val",
+                "fscore_val": "fscore_val", 
+            }, on="validation_end"))
 
     if gpuid is not None:
         if gpuid == -1:
@@ -475,6 +477,7 @@ def train_instrument_detection_model(task,
         accelerator = None
 
     # hardcode some 
+    prog_bar_refresh_rate=0 if use_ray_tune else 1
     from pytorch_lightning import Trainer
     trainer = Trainer(
         accelerator=accelerator,
@@ -486,7 +489,7 @@ def train_instrument_detection_model(task,
         terminate_on_nan=True,
         resume_from_checkpoint=best_ckpt,
         weights_summary='full',
-        progress_bar_refresh_rate=0, 
+        progress_bar_refresh_rate=prog_bar_refresh_rate, 
         log_gpu_memory=True,
         gpus=gpus,
         profiler=pl.profiler.SimpleProfiler(

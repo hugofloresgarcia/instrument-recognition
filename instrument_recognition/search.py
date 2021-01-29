@@ -7,12 +7,16 @@ from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 
+SEEDS = [440, 433, 12, 23, 11]
+SEEDS = [(1 + n) ** 2 for n in range(10)]
+# SEEDS = [s ** 2 for s in SEEDS]
+
 DEFAULTS =  {
     'parent_name': 'DEFAULT',
     'name': 'auto', 
     'version': 0, 
     'gpuid': 0, 
-    'random_seed': 42,
+    'random_seed': 440,
     'test': False,
 
     'max_epochs': 250, 
@@ -20,20 +24,68 @@ DEFAULTS =  {
     'mixup': False, 
     'mixup_alpha': 0.2,
     'dropout': 0.4, 
+    'learning_rate': 3e-4,
 
-    'dataset_name': "mdb-solos", 
-    'use_augmented': True, 
+    'dataset_name': "mdb-solos-train-soundscapes", 
+    'use_augmented': False, 
     'batch_size': 256, 
     'num_workers': 20,
 
-    'embedding_name': 'openl3-mel256-512-music', 
+    'embedding_name': 'openl3-mel256-6144-music', 
     # NOTE: all of these three should be intertwined?
-    'hidden_dim': 512, 
-    'recurrence_type': 'transformer-8', 
+    'hidden_dim': 1024, 
+    'recurrence_type': 'bigru', 
     'recurrence_num_layers': 1,
 }
 
 CONFIGS = {
+    'input-representation':{
+        'dataset_name': tune.grid_search(['mdb-solos', 'mdb-solos-train-soundscapes']),
+        'random_seed': tune.grid_search(SEEDS),
+        'embedding_name': tune.grid_search(list(ir.models.core.INPUT_DIMS.keys())),
+    },
+    'transformer-search':{
+        'random_seed': tune.grid_search(SEEDS),
+        'recurrence_type': tune.grid_search([
+            f'transformer-{heads}' for heads in [1, 2, 4, 8, 16, 32, 64]
+        ]), 
+        'recurrence_num_layers': tune.grid_search([1, 2, 4, 6, 8])
+    },
+    'bilstm-search':{
+        'random_seed': tune.grid_search(SEEDS),
+        'recurrence_type': 'bilstm',
+        'recurrence_num_layers': tune.grid_search([1, 2, 4, 6, 8])
+    },
+    'gru-search':{
+        'random_seed': tune.grid_search(SEEDS),
+        'recurrence_type': 'bigru',
+        'recurrence_num_layers': tune.grid_search([1, 2, 4, 6, 8])
+    },
+    'hidden_dim':{
+        'dataset_name': tune.grid_search(['mdb-solos', 'mdb-solos-train-soundscapes']),
+        'random_seed': tune.grid_search(SEEDS),
+        'hidden_dim': tune.grid_search([128, 256, 512, 1024])
+    },
+    'augmentation':{
+        'dataset_name': tune.grid_search(['mdb-solos', 'mdb-solos-train-soundscapes']),
+        'random_seed': tune.grid_search(SEEDS),
+        'use_augmented': tune.grid_search([True, False])
+    },
+    'soundscape':{
+        'random_seed': tune.grid_search(SEEDS),
+        'dataset_name': tune.grid_search(['mdb-solos', 'mdb-solos-train-soundscapes'])
+    },
+    'recurrence_type':{
+        'dataset_name': tune.grid_search(['mdb-solos', 'mdb-solos-train-soundscapes']),
+        'random_seed': tune.grid_search(SEEDS),
+        'recurrence_type': tune.grid_search(['bigru', 'bilstm', 'transformer-4', 'none'])
+    },
+    'enchilada': {
+        'dataset_name': 'mdb-solos-train-soundscapes',
+        'random_seed': 88, 
+        'recurrence_type': 'bilstm', 
+        'use_augmented': True, 
+    },
     'ballz2dawallz': {
             "learning_rate": tune.loguniform(1e-4, 1e-1),
             "batch_size": tune.choice([32, 64, 128, 256]),
@@ -82,7 +134,7 @@ def run_trial(config, **kwargs):
 
     hparams.name = full_name(hparams, keep=config.keys())
 
-    return ir.train.run_task(hparams)
+    return ir.train.run_task(hparams, use_ray=True)
 
 def run_experiment(exp, num_samples):
 
@@ -112,14 +164,17 @@ def run_experiment(exp, num_samples):
 
 if __name__ == "__main__":
     import argparse
+    from datetime import datetime
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('--name', type=str, required=True)
     parser.add_argument('--num_samples', type=int, default=1)
+    parser.add_argument('--gpu_capacity', type=float, default=1.0)
     
     args = parser.parse_args()
 
-    exp = Experiment(defaults=DEFAULTS, config=CONFIGS[args.name], gpu_fraction=0.2)
+    exp = Experiment(defaults=DEFAULTS, config=CONFIGS[args.name], gpu_fraction= 0.2 / args.gpu_capacity)
+    exp.hparams.parent_name = args.name + '-' + datetime.now().strftime("%m.%d.%Y")
 
     run_experiment(exp, args.num_samples)

@@ -144,7 +144,7 @@ class Dataset(torch.utils.data.Dataset):
 
             return torch.from_numpy(audio)
         else:
-            path_to_embedding = self.cache_dir.parent / Path(Path(entry['path_to_audio']).relative_to(self.root_dir.parent)).with_suffix('.npy')
+            path_to_embedding = self.cache_dir.parent.parent / Path(Path(entry['path_to_audio']).relative_to(ir.DATA_DIR)).with_suffix('.npy')
             assert path_to_embedding.exists(), f"{path_to_embedding} does not exist :("
             X = np.load(path_to_embedding)
             X = np.abs(X)

@@ -153,7 +153,35 @@ def preprocess_dataset(name: str, model_name: str, batch_size: int, num_workers:
     elif 'cqt2dft' in model_name:
         _preprocess_cqt2dft(name=name, num_workers=num_workers)
 
+def link_caches():
+    output = 'mdb-solos-train-soundscapes'
+    partition_map = [
+        {
+            'dataset': 'mdb-solos-soundscapes', 
+            'partition': ['train'], 
+        }, {
+            'dataset': 'mdb-solos', 
+            'partition': ['validation', 'test'],  
+        }
+    ]
+
+    for config in partition_map:
+        dataset = config['dataset']
+        models = [model for model in os.listdir(ir.CACHE_DIR) if Path(ir.CACHE_DIR/model/dataset).exists()]
+
+        for model in models:
+            for partition in config['partition']:
+
+                src = ir.CACHE_DIR / model / dataset / partition
+                dest = ir.CACHE_DIR / model / output / partition
+
+                os.makedirs(dest.parent, exist_ok=True)
+                os.symlink(src, dest)
+    
+
 if __name__ == "__main__":
+#     link_caches()
+#     exit()
     import argparse
     
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)

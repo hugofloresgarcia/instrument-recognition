@@ -9,15 +9,6 @@ from instrument_recognition.models.transformer import TransformerEncoder
 BATCH_FIRST = False
 DEFAULT_SEQ_LEN = 10
 
-model_sizes = {
-    'cqt2dft': dict(d_input=128, d_intermediate=128, has_linear_proj=True),
-    'vggish': dict(d_input=128, d_intermediate=128, has_linear_proj=True),
-    'tiny':  dict(d_input=512,  d_intermediate=128, has_linear_proj=True),
-    'small': dict(d_input=512,  d_intermediate=512, has_linear_proj=True),
-    'mid':   dict(d_input=6144, d_intermediate=512, has_linear_proj=True),
-    'huge':  dict(d_input=6144, d_intermediate=1024, has_linear_proj=True)
-}
-
 INPUT_DIMS = {
     'vggish': 128,
 
@@ -65,13 +56,10 @@ class Model(pl.LightningModule):
         self.recurrence_num_layers = recurrence_num_layers
         self.has_recurrent_layer = False if recurrence_type.lower() == 'none' else True
 
-        assert self.output_dim > 0
-        assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
+        self.d_input = INPUT_DIMS[embedding_name]
+        self.d_intermediate = hidden_dim
 
-        d_input = INPUT_DIMS[embedding_name]
-        d_intermediate = hidden_dim
-
-        self.input_shape = (1, DEFAULT_SEQ_LEN, d_input)
+        self.input_shape = (1, DEFAULT_SEQ_LEN, self.d_input)
 
         if embedding_name == 'cqt2dft':
             from instrument_recognition.models.embed import CQT2DFTEmbedding
@@ -80,20 +68,20 @@ class Model(pl.LightningModule):
 
         # linear projection layer
         self.fc_proj = nn.Sequential(
-            nn.BatchNorm1d(d_input), 
-            nn.Linear(d_input, d_intermediate), 
+            nn.BatchNorm1d(self.d_input), 
+            nn.Linear(self.d_input, self.d_intermediate), 
             nn.ReLU()
         )
 
         # add recurrent layers
         if self.has_recurrent_layer:
             num_layers = self.recurrence_num_layers
-            recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=d_intermediate, 
-                                                        num_layers=num_layers, d_hidden=d_intermediate, dropout=dropout)
+            recurrent_layer, r_dim = get_recurrent_layer(layer_name=recurrence_type, d_in=self.d_intermediate, 
+                                                        num_layers=num_layers, d_hidden=self.d_intermediate, dropout=dropout)
             # recurrent_layer = nn.Sequential(nn.BatchNorm1d(d_intermediate), recurrent_layer)
             self.__setattr__(name=recurrence_type, value=recurrent_layer)
         else:
-            r_dim = d_intermediate
+            r_dim = self.d_intermediate
 
         # add the fully connected classifier :)
         self.fc_output = nn.Sequential(
@@ -150,10 +138,9 @@ class Model(pl.LightningModule):
 
         # input should be (sequence, batch, embedding)
         assert x.ndim == 3
-        assert x.shape[-1] == model_sizes[self.model_size]['d_input'], f'{x.shape[-1]}-{model_sizes[self.model_size]["d_input"]}'
+        assert x.shape[-1] == self.d_input, f'{x.shape[-1]}-{self.d_input}'
 
-        if self.has_linear_proj:
-            x = self._linear(x, self.fc_proj)
+        x = self._linear(x, self.fc_proj)
         
         if self.has_recurrent_layer:
             recurrent_layer = self.__getattr__(self.recurrence_type)
@@ -192,8 +179,10 @@ def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers:
         # NOTE: DEFAULT NUMBER OF HEADS IN TRANSFORMER
         if '-' not in layer_name:
             num_heads = 4
-        _, num_heads = layer_name.split('-')
-        layer = TransformerEncoder(d_model=d_in, num_heads=num_heads, d_hidden=d_hidden, 
+        else:
+            _, num_heads = layer_name.split('-')
+            num_heads = int(num_heads)
+        layer = TransformerEncoder(d_model=d_in, num_heads=num_heads, d_hidden=d_hidden*4, 
                                    num_layers=num_layers, dropout=dropout)
         output_dim = d_in
 
