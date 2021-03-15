@@ -30,7 +30,7 @@ install_requires = [
     'soundfile',
     'librosa', 
     'sox',  
-    'ray[tune]'
+    'ray[tune]',
     'uncertainty_metrics', 
     'sklearn']
 

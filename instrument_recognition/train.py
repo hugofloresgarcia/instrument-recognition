@@ -50,7 +50,7 @@ def run_task(hparams):
     # create custom automatic name if auto
     hparams.name = get_exp_name(hparams)
     # NOTE: this a patch to enable hyperparam search with raytune
-    hparams = parse_model_def(hparams)
+    # hparams = parse_model_def(hparams)
 
     # load the datamodule
     print(f'loading datamodule...')

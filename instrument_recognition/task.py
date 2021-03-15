@@ -437,7 +437,7 @@ def train_instrument_detection_model(task,
     # set up checkpoint callbacks
     from pytorch_lightning.callbacks import ModelCheckpoint
     checkpoint_callback = ModelCheckpoint(
-        filepath= str(checkpoint_dir  / '{epoch:02d}-{fscore_val:.2f}'), 
+        dirpath= str(checkpoint_dir), 
         monitor='fscore/val', 
         verbose=False, 
         mode='max',
@@ -451,12 +451,12 @@ def train_instrument_detection_model(task,
     lr_logger = pl.callbacks.LearningRateMonitor(logging_interval='step')
     callbacks.append(lr_logger)
 
-    from ray.tune.integration.pytorch_lightning import TuneReportCallback
-    callbacks.append(
-        TuneReportCallback({
-            "loss_val": "loss/val",
-            "fscore_val": "fscore_val", 
-        }, on="validation_end"))
+    # from ray.tune.integration.pytorch_lightning import TuneReportCallback
+    # callbacks.append(
+    #     TuneReportCallback({
+    #         "loss_val": "loss/val",
+    #         "fscore_val": "fscore_val", 
+    #     }, on="validation_end"))
 
     if gpuid is not None:
         if gpuid == -1:
@@ -484,7 +484,7 @@ def train_instrument_detection_model(task,
         terminate_on_nan=True,
         resume_from_checkpoint=best_ckpt,
         weights_summary='full',
-        progress_bar_refresh_rate=0, 
+        progress_bar_refresh_rate=1, 
         log_gpu_memory=True,
         gpus=gpus,
         profiler=pl.profiler.SimpleProfiler(

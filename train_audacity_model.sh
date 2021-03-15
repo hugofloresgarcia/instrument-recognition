@@ -1,0 +1,17 @@
+python3.7 -m instrument_recognition.train --parent_name audacity \
+	--name recurrent_base \
+	--version 0 \
+	--gpuid 0 \
+	--max_epochs 300 \
+	--test false \
+	--model_size small \
+	--recurrence_type lstm \
+	--dropout 0.1 \
+	--dataset_name mdb-new-soundscapes \
+	--batch_size 256 \
+	--num_workers 20 \
+	--use_augmented False \
+	--embedding_name openl3-mel256-512-music \
+	--learning_rate 3e-4 \
+	--mixup true \
+	--mixup_alpha 0.2

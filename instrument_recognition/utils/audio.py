@@ -2,7 +2,6 @@ import numpy as np
 import librosa
 import resampy
 import torch
-import torchaudio
 import pydub
 
 def load_audio_file(path_to_audio, sr=48000):

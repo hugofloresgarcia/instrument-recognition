@@ -64,13 +64,13 @@ class Model(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.output_dim = output_dim
-        self.model_size = model_size
+        self._model_size = model_size
         self.recurrence_type = recurrence_type
         self.has_linear_proj = model_sizes[model_size]['has_linear_proj']
         self.has_recurrent_layer = False if recurrence_type.lower() == 'none' else True
 
         assert self.output_dim > 0
-        assert self.model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
+        assert self._model_size in model_sizes.keys(), f'model_size must be one of {model_sizes.keys()}'
 
         d_input = model_sizes[model_size]['d_input']
         d_intermediate = model_sizes[model_size]['d_intermediate']
@@ -153,7 +153,7 @@ class Model(pl.LightningModule):
 
         # input should be (sequence, batch, embedding)
         assert x.ndim == 3
-        assert x.shape[-1] == model_sizes[self.model_size]['d_input'], f'{x.shape[-1]}-{model_sizes[self.model_size]["d_input"]}'
+        assert x.shape[-1] == model_sizes[self._model_size]['d_input'], f'{x.shape[-1]}-{model_sizes[self._model_size]["d_input"]}'
 
         if self.has_linear_proj:
             x = self._linear(x, self.fc_proj)
@@ -162,7 +162,7 @@ class Model(pl.LightningModule):
             recurrent_layer = self.__getattr__(self.recurrence_type)
             if 'lstm' in self.recurrence_type \
                 or 'gru' in self.recurrence_type:
-                x, hiddens = recurrent_layer(x)
+                x, hiddens = self.recurrent_pass(recurrent_layer, x)
                 # x = hiddens[0][-1].unsqueeze(0)
             else:
                 x = recurrent_layer(x)
@@ -174,6 +174,10 @@ class Model(pl.LightningModule):
         x = x.view(seq_dim, batch_dim, -1)
 
         return x
+    
+    # @torch.jit.script
+    def recurrent_pass(self, layer, x):
+        return layer(x)
 
 def get_recurrent_layer(layer_name: str = 'bilstm', d_in: int = 512, num_layers: int = 4,
                         d_hidden: int = 128, num_heads: int = 4, dropout: float = 0.3):

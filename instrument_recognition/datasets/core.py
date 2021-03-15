@@ -15,7 +15,11 @@ import instrument_recognition as ir
 from instrument_recognition import utils
 import audio_utils as au
 
+
 remap_class_dict = {'violin section': 'violin', 'viola section': 'viola'}
+from instrument_recognition.datasets.mdb import remap as remap_class_dict
+remap_class_dict = {'violin': 'strings', 'viola': 'strings', 'cello': 'strings', 'clarinet': 'reeds'}
+
 
 def debatch(batch):
     for k,v in batch.items():
@@ -73,7 +77,6 @@ class Dataset(torch.utils.data.Dataset):
             pass
             # class_subset = ['male singer', 'female singer', 'violin', 'clean electric guitar', 
             #                 'distorted electric guitar', 'piano', 'clarinet', 'trumpet']
-
         if class_subset is not None:
             self.filter_records_by_class_subset(class_subset)
 
@@ -139,7 +142,7 @@ class Dataset(torch.utils.data.Dataset):
 
             return torch.from_numpy(audio)
         else:
-            path_to_embedding = self.cache_dir / Path(Path(entry['path_to_audio']).relative_to(self.root_dir)).with_suffix('.npy')
+            path_to_embedding = self.cache_dir.parent / Path(Path(entry['path_to_audio']).relative_to(self.root_dir.parent)).with_suffix('.npy')
             assert path_to_embedding.exists(), f"{path_to_embedding} does not exist :("
             X = np.load(path_to_embedding)
             X = np.abs(X)
@@ -264,8 +267,9 @@ class CollateBatches:
         X = torch.stack(X)
         y = torch.stack(y)
 
-        # add the rest of all keys
-        data = {key: [entry[key] for entry in batch] for key in batch[0]}
+        # add the rest of all keys that exist in all of the entries
+        common_keys = set.intersection(*map(set, batch))
+        data = {key: [entry[key] for entry in batch] for key in common_keys}
 
         data['X'] = X
         data['y'] = y

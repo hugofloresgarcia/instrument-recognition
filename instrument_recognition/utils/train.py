@@ -1,5 +1,6 @@
 import time
 import os
+from pathlib import Path
 
 import numpy as np
 import torch.nn as nn
@@ -14,7 +15,7 @@ def load_best_model_from_test_tube(test_tube_dir: str):
     (along with name and version), this function will load a Model
     with its state dict. 
     """
-    ckpt = ir.utils.train.get_best_ckpt_path(test_tube_dir / 'checkpoints')
+    ckpt = ir.utils.train.get_best_ckpt_path(Path(test_tube_dir) / 'checkpoints')
 
     ckpt = torch.load(ckpt)
 

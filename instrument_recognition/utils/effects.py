@@ -34,7 +34,9 @@ def augment_from_array_to_array(audio, sr, effect_chain=None):
     audio = np.squeeze(audio, axis=-1)
     tfm_audio = utils.audio.zero_pad(tfm_audio, audio.shape[0])
     tfm_audio = tfm_audio[0:audio.shape[0]]
+    # print(tfm_audio.shape)
     tfm_audio = au.librosa_output_wrap(audio)
+    # print(tfm_audio.shape)
     return tfm_audio, effect_params
 
 def trim_silence(audio, sr, min_silence_duration=0.3):
@@ -122,7 +124,7 @@ def add_effect_with_random_params(tfm, effect_name):
             params[filter_num] = sub_params
 
     elif 'pitch' == effect_name:
-        params = dict(n_semitones=get_randn(mu=0, std=1, min=-3, max=3))
+        params = dict(n_semitones=get_randn(mu=0, std=3, min=-7, max=7))
         tfm.pitch(**params)
     
     elif 'reverb' == effect_name:

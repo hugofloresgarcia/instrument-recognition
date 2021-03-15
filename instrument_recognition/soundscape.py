@@ -54,7 +54,7 @@ def make_soundscapes(name: str, dataset: str = 'medleydb', monophonic: bool = Tr
         soundscapes_path = data_dir/name/partition
 
         total_len_s = sum([get_audio_duration(str(fg_path/subd/d)) for subd in os.listdir(fg_path) for d in os.listdir(fg_path/subd) if Path(d).suffix == '.wav'])
-        num_soundscapes = int(int(total_len_s) // duration * 3)
+        num_soundscapes = int(int(total_len_s) // duration * 3) 
         print(f'generating {num_soundscapes} soundscapes')
 
         event_time_spec = dict(dist='truncnorm', mean=5.0, std=2.0, min=0.0, max=10.0)
